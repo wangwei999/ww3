@@ -78,7 +78,7 @@ export default function ReminderPopup({ message, duration, onClose }: ReminderPo
           : '-translate-x-full opacity-0 scale-95'
       }`}
     >
-      <div className="relative w-96 h-64 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/20">
+      <div className="relative w-[28rem] h-72 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/20">
         {/* 背景图片 */}
         {currentBg && (
           <div
@@ -99,9 +99,9 @@ export default function ReminderPopup({ message, duration, onClose }: ReminderPo
         </div>
 
         {/* 内容区域 */}
-        <div className="relative h-full flex flex-col justify-between p-6">
+        <div className="relative h-full flex flex-col p-5">
           {/* 标题 */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between shrink-0">
             <h3 className="text-white font-bold text-lg flex items-center gap-2 drop-shadow-lg">
               <span className="text-2xl animate-bounce">🔔</span>
               <span>提醒</span>
@@ -116,15 +116,25 @@ export default function ReminderPopup({ message, duration, onClose }: ReminderPo
             </Button>
           </div>
 
-          {/* 提醒内容 */}
-          <div className="flex-1 flex items-center justify-center px-4">
-            <p className="text-white text-xl font-medium text-center leading-relaxed drop-shadow-lg">
-              {message}
-            </p>
+          {/* 提醒内容 - 可滚动区域 */}
+          <div className="flex-1 my-3 min-h-0">
+            <div 
+              className="h-full overflow-y-auto pr-2
+                [&::-webkit-scrollbar]:w-2
+                [&::-webkit-scrollbar-track]:bg-white/10
+                [&::-webkit-scrollbar-track]:rounded-full
+                [&::-webkit-scrollbar-thumb]:bg-white/30
+                [&::-webkit-scrollbar-thumb]:rounded-full
+                [&::-webkit-scrollbar-thumb]:hover:bg-white/50"
+            >
+              <p className="text-white text-lg font-medium leading-relaxed drop-shadow-lg whitespace-pre-wrap">
+                {message}
+              </p>
+            </div>
           </div>
 
           {/* 底部信息 */}
-          <div className="flex items-center justify-between text-white/80 text-sm">
+          <div className="flex items-center justify-between text-white/80 text-sm shrink-0 pt-2 border-t border-white/10">
             <span className="flex items-center gap-1.5">
               <span>⏱️</span>
               <span>{duration}秒后自动关闭</span>
