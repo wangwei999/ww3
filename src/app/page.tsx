@@ -19,12 +19,13 @@ export default function Home() {
   const [showPopup, setShowPopup] = useState(false);
   const [fileName, setFileName] = useState<string>('');
   const [countdown, setCountdown] = useState<number>(0);
+  const [popupKey, setPopupKey] = useState(0); // 用于强制重新渲染弹窗
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   
-  // 使用 ref 存储最新值，避免闭包问题
+  // 使用 ref 存储最新值
   const remindersRef = useRef<string[]>([]);
   const displayDurationRef = useRef<number>(20);
   const intervalMinutesRef = useRef<number>(5);
@@ -52,18 +53,15 @@ export default function Home() {
 
     try {
       if (extension === 'txt') {
-        // 处理 TXT 文件
         const text = await file.text();
         const lines = text.split('\n').filter(line => line.trim() !== '');
         setReminders(lines);
       } else if (extension === 'xlsx' || extension === 'xls') {
-        // 处理 Excel 文件
         const data = await file.arrayBuffer();
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as string[][];
         
-        // 提取所有非空单元格的内容
         const allTexts: string[] = [];
         jsonData.forEach(row => {
           row.forEach(cell => {
@@ -80,17 +78,20 @@ export default function Home() {
     }
   }, []);
 
-  // 显示随机提醒 - 直接使用 ref 获取最新值
+  // 显示随机提醒
   const showRandomReminder = useCallback(() => {
     const currentReminders = remindersRef.current;
     const currentDuration = displayDurationRef.current;
     
-    console.log('showRandomReminder called, reminders count:', currentReminders.length);
+    console.log('🔔 showRandomReminder called, reminders:', currentReminders.length);
     
     if (currentReminders.length === 0) {
-      console.log('No reminders, skipping');
+      console.log('❌ No reminders, skipping');
       return;
     }
+    
+    // 先关闭当前弹窗
+    setShowPopup(false);
     
     // 清除之前的弹窗定时器
     if (popupTimerRef.current) {
@@ -98,46 +99,66 @@ export default function Home() {
       popupTimerRef.current = null;
     }
     
-    const randomIndex = Math.floor(Math.random() * currentReminders.length);
-    const selectedReminder = currentReminders[randomIndex];
-    console.log('Selected reminder:', selectedReminder);
-    
-    setCurrentReminder(selectedReminder);
-    setShowPopup(true);
+    // 短暂延迟后显示新弹窗，确保动画重置
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * currentReminders.length);
+      const selectedReminder = currentReminders[randomIndex];
+      console.log('📝 Selected reminder:', selectedReminder);
+      
+      setCurrentReminder(selectedReminder);
+      setPopupKey(prev => prev + 1); // 强制重新渲染弹窗
+      setShowPopup(true);
 
-    // 设置自动关闭
-    popupTimerRef.current = setTimeout(() => {
-      console.log('Auto closing popup');
-      setShowPopup(false);
-    }, currentDuration * 1000);
-  }, []); // 无依赖，通过 ref 访问最新值
+      // 设置自动关闭
+      popupTimerRef.current = setTimeout(() => {
+        console.log('⏰ Auto closing popup');
+        setShowPopup(false);
+      }, currentDuration * 1000);
+    }, 50);
+  }, []);
 
   // 开始定时器
   const startTimer = useCallback(() => {
     const currentReminders = remindersRef.current;
     
-    console.log('startTimer called, reminders count:', currentReminders.length);
+    console.log('▶️ startTimer called, reminders:', currentReminders.length);
     
     if (currentReminders.length === 0) {
       alert('请先上传提醒内容文件');
       return;
     }
 
+    // 清除所有现有定时器
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    if (popupTimerRef.current) {
+      clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+
     setIsRunning(true);
     const interval = intervalMinutesRef.current;
     setCountdown(interval * 60);
 
-    // 立即显示一次
-    console.log('Showing first reminder immediately');
+    // 立即显示第一次
+    console.log('🚀 Showing first reminder');
     showRandomReminder();
 
     // 设置主定时器
-    console.log('Setting interval timer for', interval, 'minutes');
+    const intervalMs = interval * 60 * 1000;
+    console.log(`⏱️ Setting interval: ${interval} minutes (${intervalMs}ms)`);
+    
     timerRef.current = setInterval(() => {
-      console.log('Interval triggered, showing reminder');
+      console.log('🔄 Interval triggered at:', new Date().toLocaleTimeString());
       showRandomReminder();
       setCountdown(intervalMinutesRef.current * 60);
-    }, interval * 60 * 1000);
+    }, intervalMs);
 
     // 倒计时定时器
     countdownRef.current = setInterval(() => {
@@ -152,7 +173,7 @@ export default function Home() {
 
   // 停止定时器
   const stopTimer = useCallback(() => {
-    console.log('Stopping timer');
+    console.log('⏹️ Stopping timer');
     setIsRunning(false);
     setShowPopup(false);
     
@@ -174,6 +195,7 @@ export default function Home() {
 
   // 关闭弹窗
   const handleClosePopup = useCallback(() => {
+    console.log('✖️ Popup closed by user');
     setShowPopup(false);
     if (popupTimerRef.current) {
       clearTimeout(popupTimerRef.current);
@@ -234,7 +256,7 @@ export default function Home() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map(min => (
+                    {[1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map(min => (
                       <SelectItem key={min} value={min.toString()}>
                         {min} 分钟
                       </SelectItem>
@@ -314,7 +336,7 @@ export default function Home() {
         {/* 控制区域 */}
         <Card className="mt-6">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">
                 {!isRunning ? (
                   <Button
@@ -368,16 +390,18 @@ export default function Home() {
           </h3>
           <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
             <li>1. 上传 TXT 或 XLSX 文件，每行内容将作为一条提醒</li>
-            <li>2. 设置提醒间隔（5-60分钟）和显示时长（20-60秒）</li>
+            <li>2. 设置提醒间隔（1-60分钟）和显示时长（20-60秒）</li>
             <li>3. 点击"开始提醒"，系统将按时弹出提醒窗口</li>
             <li>4. 每次弹窗会随机显示一条内容，并配有自然景色背景</li>
+            <li>5. 选择1分钟间隔可快速测试功能</li>
           </ul>
         </div>
       </div>
 
-      {/* 提醒弹窗 */}
-      {showPopup && (
+      {/* 提醒弹窗 - 使用 key 强制重新渲染 */}
+      {showPopup && currentReminder && (
         <ReminderPopup
+          key={popupKey}
           message={currentReminder}
           duration={displayDuration}
           onClose={handleClosePopup}
