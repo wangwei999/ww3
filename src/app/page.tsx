@@ -6,9 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Play, Square, FileText, Clock, Eye } from 'lucide-react';
+import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff } from 'lucide-react';
 import ReminderPopup from '@/components/ReminderPopup';
 import * as XLSX from 'xlsx';
+
+// 背景图片列表 - 用于通知图标
+const backgroundIcons = [
+  '/backgrounds/mountain-lake-hd.jpeg',
+  '/backgrounds/tropical-beach-hd.jpeg',
+  '/backgrounds/forest-sunlight-hd.jpeg',
+  '/backgrounds/lavender-fields-hd.jpeg',
+  '/backgrounds/aurora-borealis-hd.jpeg',
+];
 
 export default function Home() {
   const [intervalMinutes, setIntervalMinutes] = useState(5);
@@ -19,7 +28,8 @@ export default function Home() {
   const [showPopup, setShowPopup] = useState(false);
   const [fileName, setFileName] = useState<string>('');
   const [countdown, setCountdown] = useState<number>(0);
-  const [popupKey, setPopupKey] = useState(0); // 用于强制重新渲染弹窗
+  const [popupKey, setPopupKey] = useState(0);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -42,6 +52,66 @@ export default function Home() {
   useEffect(() => {
     intervalMinutesRef.current = intervalMinutes;
   }, [intervalMinutes]);
+
+  // 检查通知权限
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  // 请求通知权限
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('您的浏览器不支持系统通知');
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    
+    if (permission === 'granted') {
+      console.log('✅ 通知权限已授权');
+    } else if (permission === 'denied') {
+      alert('通知权限被拒绝，您将无法在浏览器最小化时收到提醒。\n请在浏览器设置中允许通知。');
+    }
+  }, []);
+
+  // 发送系统通知
+  const sendSystemNotification = useCallback((message: string) => {
+    if (notificationPermission !== 'granted') {
+      console.log('⚠️ 通知权限未授权，跳过系统通知');
+      return;
+    }
+
+    // 随机选择背景图标
+    const randomIcon = backgroundIcons[Math.floor(Math.random() * backgroundIcons.length)];
+    
+    try {
+      const notification = new Notification('定时提醒', {
+        body: message,
+        icon: randomIcon,
+        tag: 'reminder-notification',
+        requireInteraction: true, // 需要用户交互才关闭
+        silent: false,
+      });
+
+      // 点击通知时聚焦窗口
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+
+      // 自动关闭通知（根据显示时长）
+      setTimeout(() => {
+        notification.close();
+      }, displayDurationRef.current * 1000);
+
+      console.log('🔔 系统通知已发送');
+    } catch (error) {
+      console.error('发送通知失败:', error);
+    }
+  }, [notificationPermission]);
 
   // 处理文件上传
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,8 +176,11 @@ export default function Home() {
       console.log('📝 Selected reminder:', selectedReminder);
       
       setCurrentReminder(selectedReminder);
-      setPopupKey(prev => prev + 1); // 强制重新渲染弹窗
+      setPopupKey(prev => prev + 1);
       setShowPopup(true);
+
+      // 发送系统通知
+      sendSystemNotification(selectedReminder);
 
       // 设置自动关闭
       popupTimerRef.current = setTimeout(() => {
@@ -115,7 +188,7 @@ export default function Home() {
         setShowPopup(false);
       }, currentDuration * 1000);
     }, 50);
-  }, []);
+  }, [sendSystemNotification]);
 
   // 开始定时器
   const startTimer = useCallback(() => {
@@ -126,6 +199,14 @@ export default function Home() {
     if (currentReminders.length === 0) {
       alert('请先上传提醒内容文件');
       return;
+    }
+
+    // 检查通知权限
+    if (notificationPermission !== 'granted') {
+      const shouldRequest = confirm('建议开启系统通知权限，这样即使浏览器最小化也能收到提醒。\n\n是否现在开启？');
+      if (shouldRequest) {
+        requestNotificationPermission();
+      }
     }
 
     // 清除所有现有定时器
@@ -169,7 +250,7 @@ export default function Home() {
         return prev - 1;
       });
     }, 1000);
-  }, [showRandomReminder]);
+  }, [showRandomReminder, notificationPermission, requestNotificationPermission]);
 
   // 停止定时器
   const stopTimer = useCallback(() => {
@@ -231,6 +312,44 @@ export default function Home() {
             上传内容文件，设置提醒间隔，让提醒按时送达
           </p>
         </div>
+
+        {/* 通知权限状态 */}
+        {notificationPermission !== 'granted' && (
+          <Card className="mb-6 border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
+            <CardContent className="pt-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <BellOff className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <p className="font-medium text-amber-800 dark:text-amber-200">
+                    系统通知未开启
+                  </p>
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    开启后即使浏览器最小化也能收到提醒
+                  </p>
+                </div>
+              </div>
+              <Button 
+                onClick={requestNotificationPermission}
+                variant="outline"
+                className="gap-2 border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
+              >
+                <Bell className="w-4 h-4" />
+                开启通知
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {notificationPermission === 'granted' && (
+          <Card className="mb-6 border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+            <CardContent className="pt-4 flex items-center gap-3">
+              <Bell className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <p className="text-green-800 dark:text-green-200">
+                ✅ 系统通知已开启，浏览器最小化时也能收到提醒
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 主要内容 */}
         <div className="grid gap-6 md:grid-cols-2">
@@ -389,11 +508,11 @@ export default function Home() {
             使用说明
           </h3>
           <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-            <li>1. 上传 TXT 或 XLSX 文件，每行内容将作为一条提醒</li>
-            <li>2. 设置提醒间隔（1-60分钟）和显示时长（20-60秒）</li>
-            <li>3. 点击"开始提醒"，系统将按时弹出提醒窗口</li>
-            <li>4. 每次弹窗会随机显示一条内容，并配有自然景色背景</li>
-            <li>5. 选择1分钟间隔可快速测试功能</li>
+            <li>1. 点击"开启通知"按钮，授权系统通知权限</li>
+            <li>2. 上传 TXT 或 XLSX 文件，每行内容将作为一条提醒</li>
+            <li>3. 设置提醒间隔（1-60分钟）和显示时长（20-60秒）</li>
+            <li>4. 点击"开始提醒"，系统将按时弹出提醒窗口</li>
+            <li>5. 即使浏览器最小化，也会收到系统通知提醒</li>
           </ul>
         </div>
       </div>
