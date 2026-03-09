@@ -10,13 +10,20 @@ import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff } from 'lucid
 import ReminderPopup from '@/components/ReminderPopup';
 import * as XLSX from 'xlsx';
 
-// 背景图片列表 - 用于通知图标
-const backgroundIcons = [
-  '/backgrounds/mountain-lake-hd.jpeg',
-  '/backgrounds/tropical-beach-hd.jpeg',
-  '/backgrounds/forest-sunlight-hd.jpeg',
-  '/backgrounds/lavender-fields-hd.jpeg',
-  '/backgrounds/aurora-borealis-hd.jpeg',
+// 背景图片列表 - 用于通知图标（使用完整URL）
+const getBackgroundUrl = (filename: string) => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/backgrounds/${filename}`;
+  }
+  return `/backgrounds/${filename}`;
+};
+
+const backgroundFiles = [
+  'mountain-lake-hd.jpeg',
+  'tropical-beach-hd.jpeg',
+  'forest-sunlight-hd.jpeg',
+  'lavender-fields-hd.jpeg',
+  'aurora-borealis-hd.jpeg',
 ];
 
 export default function Home() {
@@ -84,17 +91,22 @@ export default function Home() {
       return;
     }
 
-    // 随机选择背景图标
-    const randomIcon = backgroundIcons[Math.floor(Math.random() * backgroundIcons.length)];
+    // 随机选择背景
+    const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
+    const imageUrl = getBackgroundUrl(randomFile);
     
     try {
-      const notification = new Notification('定时提醒', {
+      // 创建通知选项
+      const options: NotificationOptions & { image?: string } = {
         body: message,
-        icon: randomIcon,
+        icon: imageUrl,        // 小图标
+        image: imageUrl,       // 大图（部分浏览器支持）
         tag: 'reminder-notification',
-        requireInteraction: true, // 需要用户交互才关闭
+        requireInteraction: true,
         silent: false,
-      });
+      };
+
+      const notification = new Notification('🔔 定时提醒', options);
 
       // 点击通知时聚焦窗口
       notification.onclick = () => {
@@ -102,12 +114,12 @@ export default function Home() {
         notification.close();
       };
 
-      // 自动关闭通知（根据显示时长）
+      // 自动关闭通知
       setTimeout(() => {
         notification.close();
       }, displayDurationRef.current * 1000);
 
-      console.log('🔔 系统通知已发送');
+      console.log('🔔 系统通知已发送，图片:', imageUrl);
     } catch (error) {
       console.error('发送通知失败:', error);
     }

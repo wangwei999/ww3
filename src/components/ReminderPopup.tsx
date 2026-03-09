@@ -78,63 +78,68 @@ export default function ReminderPopup({ message, duration, onClose }: ReminderPo
           : '-translate-x-full opacity-0 scale-95'
       }`}
     >
-      {/* 进度条 - 放在最外层顶部 */}
-      <div className="absolute -top-1 left-0 right-0 h-1.5 bg-gray-300/50 rounded-full overflow-hidden z-10">
-        <div
-          className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-100 ease-linear"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+      <div className="relative w-[28rem] h-72 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/20">
+        {/* 背景图片 */}
+        {currentBg && (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${currentBg})` }}
+          />
+        )}
+        
+        {/* 渐变遮罩层 */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/60 backdrop-blur-sm" />
 
-      <div className="flex flex-col w-[420px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-gray-200/50 bg-white">
-        {/* 上方：图片区域 */}
-        <div className="relative h-[240px] w-full overflow-hidden">
-          {currentBg && (
-            <img
-              src={currentBg}
-              alt="自然景观"
-              className="w-full h-full object-cover"
-            />
-          )}
-          {/* 图片上的标题 */}
-          <div className="absolute top-3 left-4 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
-            <span className="text-xl animate-bounce">🔔</span>
-            <span className="text-white font-semibold text-sm">提醒</span>
-          </div>
-          {/* 关闭按钮 */}
-          <Button
-            onClick={handleClose}
-            variant="ghost"
-            size="icon"
-            className="absolute top-3 right-3 text-white hover:bg-black/30 h-8 w-8 rounded-full bg-black/20 backdrop-blur-sm"
-          >
-            <X className="w-4 h-4" />
-          </Button>
+        {/* 进度条 */}
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gray-800/50">
+          <div
+            className="h-full bg-gradient-to-r from-white/90 to-white/60 transition-all duration-100 ease-linear"
+            style={{ width: `${progress}%` }}
+          />
         </div>
 
-        {/* 下方：文字内容区域 */}
-        <div className="flex flex-col bg-white">
-          {/* 提醒内容 */}
-          <div className="p-4 max-h-[120px] overflow-y-auto
-            [&::-webkit-scrollbar]:w-1.5
-            [&::-webkit-scrollbar-track]:bg-gray-100
-            [&::-webkit-scrollbar-track]:rounded-full
-            [&::-webkit-scrollbar-thumb]:bg-gray-300
-            [&::-webkit-scrollbar-thumb]:rounded-full
-            [&::-webkit-scrollbar-thumb]:hover:bg-gray-400"
-          >
-            <p className="text-gray-800 text-base leading-relaxed whitespace-pre-wrap">
-              {message}
-            </p>
+        {/* 内容区域 */}
+        <div className="relative h-full flex flex-col p-5">
+          {/* 标题 */}
+          <div className="flex items-center justify-between shrink-0">
+            <h3 className="text-white font-bold text-lg flex items-center gap-2 drop-shadow-lg">
+              <span className="text-2xl animate-bounce">🔔</span>
+              <span>提醒</span>
+            </h3>
+            <Button
+              onClick={handleClose}
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20 h-8 w-8"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+
+          {/* 提醒内容 - 可滚动区域 */}
+          <div className="flex-1 my-3 min-h-0">
+            <div 
+              className="h-full overflow-y-auto pr-2
+                [&::-webkit-scrollbar]:w-2
+                [&::-webkit-scrollbar-track]:bg-white/10
+                [&::-webkit-scrollbar-track]:rounded-full
+                [&::-webkit-scrollbar-thumb]:bg-white/30
+                [&::-webkit-scrollbar-thumb]:rounded-full
+                [&::-webkit-scrollbar-thumb]:hover:bg-white/50"
+            >
+              <p className="text-white text-lg font-medium leading-relaxed drop-shadow-lg whitespace-pre-wrap">
+                {message}
+              </p>
+            </div>
           </div>
 
           {/* 底部信息 */}
-          <div className="flex items-center justify-between text-gray-500 text-xs px-4 py-2 border-t border-gray-100 bg-gray-50/50">
-            <span className="flex items-center gap-1">
+          <div className="flex items-center justify-between text-white/80 text-sm shrink-0 pt-2 border-t border-white/10">
+            <span className="flex items-center gap-1.5">
               <span>⏱️</span>
               <span>{duration}秒后自动关闭</span>
             </span>
-            <span className="font-mono text-gray-400">
+            <span className="text-white/60 font-mono">
               {new Date().toLocaleTimeString('zh-CN', { 
                 hour: '2-digit', 
                 minute: '2-digit' 
