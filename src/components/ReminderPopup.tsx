@@ -10,13 +10,13 @@ interface ReminderPopupProps {
   onClose: () => void;
 }
 
-// 背景图片列表
+// 背景图片列表 - 高清4K自然景观
 const backgrounds = [
-  '/backgrounds/mountain-lake.jpeg',
-  '/backgrounds/sunset-beach.jpeg',
-  '/backgrounds/rainforest.jpeg',
-  '/backgrounds/cherry-blossom.jpeg',
-  '/backgrounds/autumn-forest.jpeg',
+  '/backgrounds/mountain-lake-hd.jpeg',      // 日出山湖
+  '/backgrounds/tropical-beach-hd.jpeg',     // 热带海滩
+  '/backgrounds/forest-sunlight-hd.jpeg',    // 阳光森林
+  '/backgrounds/lavender-fields-hd.jpeg',    // 薰衣草田
+  '/backgrounds/aurora-borealis-hd.jpeg',    // 北极光
 ];
 
 export default function ReminderPopup({ message, duration, onClose }: ReminderPopupProps) {
