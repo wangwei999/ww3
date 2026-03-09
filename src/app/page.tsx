@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff } from 'lucide-react';
+import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff, Trash2 } from 'lucide-react';
 import ReminderPopup from '@/components/ReminderPopup';
 import * as XLSX from 'xlsx';
 
@@ -158,6 +158,18 @@ export default function Home() {
       console.error('文件解析错误:', error);
       alert('文件解析失败，请检查文件格式');
     }
+  }, []);
+
+  // 清除已上传的文件
+  const handleClearFile = useCallback(() => {
+    setFileName('');
+    setReminders([]);
+    // 重置 file input
+    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    console.log('🗑️ 文件已清除');
   }, []);
 
   // 显示随机提醒
@@ -446,12 +458,26 @@ export default function Home() {
                   <Upload className="w-4 h-4 mr-2" />
                   选择文件
                 </Button>
+                {fileName && (
+                  <Button
+                    onClick={handleClearFile}
+                    disabled={isRunning}
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                    title="删除文件"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
 
               {fileName && (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                  <FileText className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">{fileName}</span>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium truncate">{fileName}</span>
+                  </div>
                 </div>
               )}
 
