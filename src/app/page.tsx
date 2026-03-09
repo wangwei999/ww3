@@ -23,6 +23,24 @@ export default function Home() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 使用 ref 存储最新值，避免闭包问题
+  const remindersRef = useRef<string[]>([]);
+  const displayDurationRef = useRef<number>(20);
+  const intervalMinutesRef = useRef<number>(5);
+
+  // 同步 ref 值
+  useEffect(() => {
+    remindersRef.current = reminders;
+  }, [reminders]);
+
+  useEffect(() => {
+    displayDurationRef.current = displayDuration;
+  }, [displayDuration]);
+
+  useEffect(() => {
+    intervalMinutesRef.current = intervalMinutes;
+  }, [intervalMinutes]);
 
   // 处理文件上传
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,52 +80,79 @@ export default function Home() {
     }
   }, []);
 
-  // 显示随机提醒
+  // 显示随机提醒 - 直接使用 ref 获取最新值
   const showRandomReminder = useCallback(() => {
-    if (reminders.length === 0) return;
+    const currentReminders = remindersRef.current;
+    const currentDuration = displayDurationRef.current;
     
-    const randomIndex = Math.floor(Math.random() * reminders.length);
-    setCurrentReminder(reminders[randomIndex]);
+    console.log('showRandomReminder called, reminders count:', currentReminders.length);
+    
+    if (currentReminders.length === 0) {
+      console.log('No reminders, skipping');
+      return;
+    }
+    
+    // 清除之前的弹窗定时器
+    if (popupTimerRef.current) {
+      clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+    
+    const randomIndex = Math.floor(Math.random() * currentReminders.length);
+    const selectedReminder = currentReminders[randomIndex];
+    console.log('Selected reminder:', selectedReminder);
+    
+    setCurrentReminder(selectedReminder);
     setShowPopup(true);
 
     // 设置自动关闭
     popupTimerRef.current = setTimeout(() => {
+      console.log('Auto closing popup');
       setShowPopup(false);
-    }, displayDuration * 1000);
-  }, [reminders, displayDuration]);
+    }, currentDuration * 1000);
+  }, []); // 无依赖，通过 ref 访问最新值
 
   // 开始定时器
   const startTimer = useCallback(() => {
-    if (reminders.length === 0) {
+    const currentReminders = remindersRef.current;
+    
+    console.log('startTimer called, reminders count:', currentReminders.length);
+    
+    if (currentReminders.length === 0) {
       alert('请先上传提醒内容文件');
       return;
     }
 
     setIsRunning(true);
-    setCountdown(intervalMinutes * 60);
+    const interval = intervalMinutesRef.current;
+    setCountdown(interval * 60);
 
     // 立即显示一次
+    console.log('Showing first reminder immediately');
     showRandomReminder();
 
-    // 设置定时器
+    // 设置主定时器
+    console.log('Setting interval timer for', interval, 'minutes');
     timerRef.current = setInterval(() => {
+      console.log('Interval triggered, showing reminder');
       showRandomReminder();
-      setCountdown(intervalMinutes * 60);
-    }, intervalMinutes * 60 * 1000);
+      setCountdown(intervalMinutesRef.current * 60);
+    }, interval * 60 * 1000);
 
-    // 倒计时
+    // 倒计时定时器
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          return intervalMinutes * 60;
+          return intervalMinutesRef.current * 60;
         }
         return prev - 1;
       });
     }, 1000);
-  }, [intervalMinutes, reminders, showRandomReminder]);
+  }, [showRandomReminder]);
 
   // 停止定时器
   const stopTimer = useCallback(() => {
+    console.log('Stopping timer');
     setIsRunning(false);
     setShowPopup(false);
     
