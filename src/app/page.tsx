@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff, Trash2 } from 'lucide-react';
+import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff, Trash2, BookOpen, Loader2, Download } from 'lucide-react';
 import ReminderPopup from '@/components/ReminderPopup';
 import * as XLSX from 'xlsx';
 
@@ -26,6 +26,10 @@ const backgroundFiles = [
   'aurora-borealis-hd.jpeg',
 ];
 
+// 支持的电子书格式
+const bookFormats = ['pdf', 'epub', 'docx', 'doc'];
+const reminderFormats = ['txt', 'xlsx', 'xls'];
+
 export default function Home() {
   const [intervalMinutes, setIntervalMinutes] = useState(5);
   const [displayDuration, setDisplayDuration] = useState(20);
@@ -38,9 +42,16 @@ export default function Home() {
   const [popupKey, setPopupKey] = useState(0);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   
+  // 拆书功能相关状态
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractProgress, setExtractProgress] = useState('');
+  const [fileMode, setFileMode] = useState<'reminder' | 'book'>('reminder');
+  const [extractedKeyPoints, setExtractedKeyPoints] = useState<string[]>([]);
+  
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // 使用 ref 存储最新值
   const remindersRef = useRef<string[]>([]);
@@ -91,16 +102,14 @@ export default function Home() {
       return;
     }
 
-    // 随机选择背景
     const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
     const imageUrl = getBackgroundUrl(randomFile);
     
     try {
-      // 创建通知选项
       const options: NotificationOptions & { image?: string } = {
         body: message,
-        icon: imageUrl,        // 小图标
-        image: imageUrl,       // 大图（部分浏览器支持）
+        icon: imageUrl,
+        image: imageUrl,
         tag: 'reminder-notification',
         requireInteraction: true,
         silent: false,
@@ -108,13 +117,11 @@ export default function Home() {
 
       const notification = new Notification('🔔 定时提醒', options);
 
-      // 点击通知时聚焦窗口
       notification.onclick = () => {
         window.focus();
         notification.close();
       };
 
-      // 自动关闭通知
       setTimeout(() => {
         notification.close();
       }, displayDurationRef.current * 1000);
@@ -125,11 +132,70 @@ export default function Home() {
     }
   }, [notificationPermission]);
 
-  // 处理文件上传
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // 下载TXT文件
+  const downloadTxtFile = useCallback((content: string[], originalFileName: string) => {
+    const text = content.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const baseName = originalFileName.replace(/\.[^/.]+$/, '');
+    link.href = url;
+    link.download = `${baseName}_要点金句.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
 
+  // 处理电子书文件（拆书功能）
+  const handleBookFile = useCallback(async (file: File) => {
+    setIsExtracting(true);
+    setExtractProgress('正在读取文件...');
+    setFileMode('book');
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileType', file.name.split('.').pop()?.toLowerCase() || '');
+      
+      setExtractProgress('正在解析内容...');
+      
+      const response = await fetch('/api/extract-book', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || '处理失败');
+      }
+      
+      setExtractProgress('提取完成！');
+      setExtractedKeyPoints(result.keyPoints);
+      
+      // 自动下载TXT文件
+      downloadTxtFile(result.keyPoints, file.name);
+      
+      // 自动加载到提醒功能
+      setReminders(result.keyPoints);
+      setFileName(file.name);
+      
+      console.log(`📚 拆书完成，提取了 ${result.keyPoints.length} 条要点`);
+      
+    } catch (error) {
+      console.error('拆书失败:', error);
+      alert(`拆书失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      setFileMode('reminder');
+    } finally {
+      setIsExtracting(false);
+      setExtractProgress('');
+    }
+  }, [downloadTxtFile]);
+
+  // 处理提醒内容文件
+  const handleReminderFile = useCallback(async (file: File) => {
+    setFileMode('reminder');
     setFileName(file.name);
     const extension = file.name.split('.').pop()?.toLowerCase();
 
@@ -160,15 +226,36 @@ export default function Home() {
     }
   }, []);
 
+  // 统一的文件上传处理
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    
+    // 判断文件类型
+    if (bookFormats.includes(extension || '')) {
+      // 电子书文件 -> 拆书模式
+      await handleBookFile(file);
+    } else if (reminderFormats.includes(extension || '')) {
+      // 提醒内容文件
+      await handleReminderFile(file);
+    } else {
+      alert(`不支持的文件格式: ${extension}\n支持的格式: PDF, EPUB, DOCX, TXT, XLSX`);
+    }
+    
+    // 重置input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [handleBookFile, handleReminderFile]);
+
   // 清除已上传的文件
   const handleClearFile = useCallback(() => {
     setFileName('');
     setReminders([]);
-    // 重置 file input
-    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.value = '';
-    }
+    setExtractedKeyPoints([]);
+    setFileMode('reminder');
     console.log('🗑️ 文件已清除');
   }, []);
 
@@ -184,16 +271,13 @@ export default function Home() {
       return;
     }
     
-    // 先关闭当前弹窗
     setShowPopup(false);
     
-    // 清除之前的弹窗定时器
     if (popupTimerRef.current) {
       clearTimeout(popupTimerRef.current);
       popupTimerRef.current = null;
     }
     
-    // 短暂延迟后显示新弹窗，确保动画重置
     setTimeout(() => {
       const randomIndex = Math.floor(Math.random() * currentReminders.length);
       const selectedReminder = currentReminders[randomIndex];
@@ -202,11 +286,8 @@ export default function Home() {
       setCurrentReminder(selectedReminder);
       setPopupKey(prev => prev + 1);
       setShowPopup(true);
-
-      // 发送系统通知
       sendSystemNotification(selectedReminder);
 
-      // 设置自动关闭
       popupTimerRef.current = setTimeout(() => {
         console.log('⏰ Auto closing popup');
         setShowPopup(false);
@@ -221,11 +302,10 @@ export default function Home() {
     console.log('▶️ startTimer called, reminders:', currentReminders.length);
     
     if (currentReminders.length === 0) {
-      alert('请先上传提醒内容文件');
+      alert('请先上传内容文件');
       return;
     }
 
-    // 检查通知权限
     if (notificationPermission !== 'granted') {
       const shouldRequest = confirm('建议开启系统通知权限，这样即使浏览器最小化也能收到提醒。\n\n是否现在开启？');
       if (shouldRequest) {
@@ -233,7 +313,6 @@ export default function Home() {
       }
     }
 
-    // 清除所有现有定时器
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -251,11 +330,9 @@ export default function Home() {
     const interval = intervalMinutesRef.current;
     setCountdown(interval * 60);
 
-    // 立即显示第一次
     console.log('🚀 Showing first reminder');
     showRandomReminder();
 
-    // 设置主定时器
     const intervalMs = interval * 60 * 1000;
     console.log(`⏱️ Setting interval: ${interval} minutes (${intervalMs}ms)`);
     
@@ -265,7 +342,6 @@ export default function Home() {
       setCountdown(intervalMinutesRef.current * 60);
     }, intervalMs);
 
-    // 倒计时定时器
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -340,7 +416,7 @@ export default function Home() {
         {/* 通知权限状态 */}
         {notificationPermission !== 'granted' && (
           <Card className="mb-6 border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
-            <CardContent className="pt-4 flex items-center justify-between">
+            <CardContent className="pt-4 flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
                 <BellOff className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 <div>
@@ -435,30 +511,53 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                内容文件
+                {fileMode === 'book' ? (
+                  <>
+                    <BookOpen className="w-5 h-5" />
+                    拆书模式
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-5 h-5" />
+                    内容文件
+                  </>
+                )}
               </CardTitle>
-              <CardDescription>上传 TXT 或 XLSX 文件，每行作为一个提醒内容</CardDescription>
+              <CardDescription>
+                {fileMode === 'book' 
+                  ? 'AI自动提取书籍要点和金句' 
+                  : '上传 TXT/XLSX 文件，每行作为一个提醒内容'}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2">
                 <input
                   type="file"
-                  accept=".txt,.xlsx,.xls"
+                  accept=".txt,.xlsx,.xls,.pdf,.epub,.docx,.doc"
                   onChange={handleFileUpload}
-                  disabled={isRunning}
+                  disabled={isRunning || isExtracting}
                   className="hidden"
                   id="file-upload"
+                  ref={fileInputRef}
                 />
                 <Button
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                  disabled={isRunning}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isRunning || isExtracting}
                   className="flex-1"
                 >
-                  <Upload className="w-4 h-4 mr-2" />
-                  选择文件
+                  {isExtracting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {extractProgress}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      选择文件
+                    </>
+                  )}
                 </Button>
-                {fileName && (
+                {fileName && !isExtracting && (
                   <Button
                     onClick={handleClearFile}
                     disabled={isRunning}
@@ -472,18 +571,38 @@ export default function Home() {
                 )}
               </div>
 
-              {fileName && (
+              {fileName && !isExtracting && (
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                   <div className="flex items-center gap-2 min-w-0">
-                    <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                    {fileMode === 'book' ? (
+                      <BookOpen className="w-4 h-4 text-purple-500 shrink-0" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                    )}
                     <span className="text-sm font-medium truncate">{fileName}</span>
                   </div>
                 </div>
               )}
 
-              {reminders.length > 0 && (
+              {isExtracting && extractProgress && (
+                <div className="p-3 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                  <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">{extractProgress}</span>
+                  </div>
+                </div>
+              )}
+
+              {reminders.length > 0 && !isExtracting && (
                 <div className="text-sm text-muted-foreground">
-                  已加载 <span className="font-bold text-primary">{reminders.length}</span> 条提醒内容
+                  {fileMode === 'book' ? (
+                    <span className="flex items-center gap-1">
+                      <Download className="w-4 h-4" />
+                      已提取 <span className="font-bold text-primary">{reminders.length}</span> 条要点/金句并自动下载
+                    </span>
+                  ) : (
+                    <span>已加载 <span className="font-bold text-primary">{reminders.length}</span> 条提醒内容</span>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -498,7 +617,7 @@ export default function Home() {
                 {!isRunning ? (
                   <Button
                     onClick={startTimer}
-                    disabled={reminders.length === 0}
+                    disabled={reminders.length === 0 || isExtracting}
                     size="lg"
                     className="gap-2"
                   >
@@ -546,16 +665,15 @@ export default function Home() {
             使用说明
           </h3>
           <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-            <li>1. 点击"开启通知"按钮，授权系统通知权限</li>
-            <li>2. 上传 TXT 或 XLSX 文件，每行内容将作为一条提醒</li>
-            <li>3. 设置提醒间隔（1-60分钟）和显示时长（20-60秒）</li>
-            <li>4. 点击"开始提醒"，系统将按时弹出提醒窗口</li>
-            <li>5. 即使浏览器最小化，也会收到系统通知提醒</li>
+            <li>📌 <strong>提醒模式</strong>：上传 TXT/XLSX 文件，每行作为一条提醒</li>
+            <li>📚 <strong>拆书模式</strong>：上传 PDF/EPUB/DOCX 电子书，AI自动提取要点金句</li>
+            <li>⏰ 设置提醒间隔（1-60分钟）和显示时长（20-60秒）</li>
+            <li>🔔 开启系统通知，浏览器最小化时也能收到提醒</li>
           </ul>
         </div>
       </div>
 
-      {/* 提醒弹窗 - 使用 key 强制重新渲染 */}
+      {/* 提醒弹窗 */}
       {showPopup && currentReminder && (
         <ReminderPopup
           key={popupKey}
