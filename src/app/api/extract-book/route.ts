@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 
+// 配置运行时选项 - 增加请求体大小限制
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // 解析PDF - 使用 pdf-parse 1.x 版本
 async function parsePDF(buffer: Buffer): Promise<string> {
   try {
