@@ -83,6 +83,7 @@ export default function Home() {
   const intervalMinutesRef = useRef<number>(5);
   const healthIntervalMinutesRef = useRef<number>(20);
   const healthDisplayDurationRef = useRef<number>(20);
+  const sendSystemNotificationRef = useRef<(message: string, title?: string) => void>(() => {});
 
   // 同步 ref 值
   useEffect(() => {
@@ -130,7 +131,7 @@ export default function Home() {
   }, []);
 
   // 发送系统通知
-  const sendSystemNotification = useCallback((message: string) => {
+  const sendSystemNotification = useCallback((message: string, title: string = '🔔 定时提醒') => {
     if (notificationPermission !== 'granted') {
       console.log('⚠️ 通知权限未授权，跳过系统通知');
       return;
@@ -144,12 +145,12 @@ export default function Home() {
         body: message,
         icon: imageUrl,
         image: imageUrl,
-        tag: 'reminder-notification',
+        tag: title === '💚 久坐提醒' ? 'health-reminder' : 'reminder-notification',
         requireInteraction: true,
         silent: false,
       };
 
-      const notification = new Notification('🔔 定时提醒', options);
+      const notification = new Notification(title, options);
 
       notification.onclick = () => {
         window.focus();
@@ -160,11 +161,14 @@ export default function Home() {
         notification.close();
       }, displayDurationRef.current * 1000);
 
-      console.log('🔔 系统通知已发送，图片:', imageUrl);
+      console.log('🔔 系统通知已发送:', title);
     } catch (error) {
       console.error('发送通知失败:', error);
     }
   }, [notificationPermission]);
+
+  // 保持 ref 最新
+  sendSystemNotificationRef.current = sendSystemNotification;
 
   // 下载TXT文件
   const downloadTxtFile = useCallback((content: string[], originalFileName: string) => {
@@ -612,32 +616,8 @@ export default function Home() {
         setShowHealthPopup(true);
         console.log('✅ setShowHealthPopup(true) 已调用');
         
-        // 发送系统通知（右下角弹窗）- 直接使用 Notification.permission 检查
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
-          const imageUrl = getBackgroundUrl(randomFile);
-          
-          try {
-            const notification = new Notification('💚 久坐提醒', {
-              body: reminder,
-              icon: imageUrl,
-              tag: 'health-reminder',
-              requireInteraction: true,
-            });
-            
-            // 点击通知时聚焦窗口
-            notification.onclick = () => {
-              window.focus();
-              notification.close();
-            };
-            
-            console.log('🔔 久坐提醒系统通知已发送');
-          } catch (error) {
-            console.error('系统通知失败:', error);
-          }
-        } else {
-          console.log('⚠️ 通知权限未授权，当前权限:', typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : '不支持');
-        }
+        // 发送系统通知（和文件上传模式一样调用 sendSystemNotification）
+        sendSystemNotificationRef.current(reminder, '💚 久坐提醒');
         
         // 自动关闭
         const duration = healthDisplayDurationRef.current;
