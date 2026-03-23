@@ -167,20 +167,36 @@ export default function Home() {
       
       setExtractProgress('正在解析内容...');
       
+      // 使用 AbortController 设置超时（5分钟）
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+      
       const response = await fetch('/api/extract-book', {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
+      
+      // 检查是否是代理错误（502/504）
+      if (response.status === 502 || response.status === 504) {
+        throw new Error('服务器繁忙，请稍后重试。如果文件较大，可能需要等待更长时间。');
+      }
       
       // 先检查响应状态，再解析 JSON
       if (!response.ok) {
         const text = await response.text();
+        // 检查是否是 HTML 错误页面（代理返回）
+        if (text.includes('<html>') || text.includes('<!DOCTYPE')) {
+          throw new Error('网络错误，请检查网络连接后重试');
+        }
         let errorMsg = '处理失败';
         try {
           const errorData = JSON.parse(text);
           errorMsg = errorData.error || errorMsg;
         } catch {
-          errorMsg = text || errorMsg;
+          errorMsg = text.slice(0, 100) || errorMsg;
         }
         throw new Error(errorMsg);
       }
@@ -201,7 +217,18 @@ export default function Home() {
       
     } catch (error) {
       console.error('拆书失败:', error);
-      alert(`拆书失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      // 处理不同类型的错误
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          alert('请求超时，文件可能过大。建议上传小于 20MB 的文件。');
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          alert('网络连接失败，请检查网络后重试');
+        } else {
+          alert(`拆书失败: ${error.message}`);
+        }
+      } else {
+        alert('拆书失败: 未知错误');
+      }
       setFileMode('reminder');
     } finally {
       setIsExtracting(false);
