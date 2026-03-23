@@ -149,6 +149,13 @@ export default function Home() {
 
   // 处理电子书文件（拆书功能）
   const handleBookFile = useCallback(async (file: File) => {
+    // 检查文件大小（限制 30MB）
+    const maxSize = 30 * 1024 * 1024; // 30MB
+    if (file.size > maxSize) {
+      alert(`文件过大，请上传小于 30MB 的文件。\n当前文件大小: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      return;
+    }
+    
     setIsExtracting(true);
     setExtractProgress('正在读取文件...');
     setFileMode('book');
