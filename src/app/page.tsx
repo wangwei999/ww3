@@ -83,7 +83,6 @@ export default function Home() {
   const intervalMinutesRef = useRef<number>(5);
   const healthIntervalMinutesRef = useRef<number>(20);
   const healthDisplayDurationRef = useRef<number>(20);
-  const notificationPermissionRef = useRef<NotificationPermission>('default');
 
   // 同步 ref 值
   useEffect(() => {
@@ -105,10 +104,6 @@ export default function Home() {
   useEffect(() => {
     healthDisplayDurationRef.current = healthDisplayDuration;
   }, [healthDisplayDuration]);
-
-  useEffect(() => {
-    notificationPermissionRef.current = notificationPermission;
-  }, [notificationPermission]);
 
   // 检查通知权限
   useEffect(() => {
@@ -617,8 +612,8 @@ export default function Home() {
         setShowHealthPopup(true);
         console.log('✅ setShowHealthPopup(true) 已调用');
         
-        // 发送系统通知（右下角弹窗）
-        if (notificationPermissionRef.current === 'granted') {
+        // 发送系统通知（右下角弹窗）- 直接使用 Notification.permission 检查
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
           const imageUrl = getBackgroundUrl(randomFile);
           
@@ -641,7 +636,7 @@ export default function Home() {
             console.error('系统通知失败:', error);
           }
         } else {
-          console.log('⚠️ 通知权限未授权，跳过系统通知');
+          console.log('⚠️ 通知权限未授权，当前权限:', typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : '不支持');
         }
         
         // 自动关闭
