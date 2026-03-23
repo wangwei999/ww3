@@ -8,6 +8,7 @@ interface ReminderPopupProps {
   message: string;
   duration: number;
   onClose: () => void;
+  isHealthReminder?: boolean;
 }
 
 // 背景图片列表 - 高清4K自然景观
@@ -19,7 +20,7 @@ const backgrounds = [
   '/backgrounds/aurora-borealis-hd.jpeg',    // 北极光
 ];
 
-export default function ReminderPopup({ message, duration, onClose }: ReminderPopupProps) {
+export default function ReminderPopup({ message, duration, onClose, isHealthReminder = false }: ReminderPopupProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [progress, setProgress] = useState(100);
   const [currentBg, setCurrentBg] = useState('');
@@ -103,8 +104,17 @@ export default function ReminderPopup({ message, duration, onClose }: ReminderPo
           {/* 标题 */}
           <div className="flex items-center justify-between shrink-0">
             <h3 className="text-white font-bold text-lg flex items-center gap-2 drop-shadow-lg">
-              <span className="text-2xl animate-bounce">🔔</span>
-              <span>提醒</span>
+              {isHealthReminder ? (
+                <>
+                  <span className="text-2xl animate-pulse">💚</span>
+                  <span>久坐提醒</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl animate-bounce">🔔</span>
+                  <span>提醒</span>
+                </>
+              )}
             </h3>
             <Button
               onClick={handleClose}

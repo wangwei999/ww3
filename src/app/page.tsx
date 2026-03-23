@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff, Trash2, BookOpen, Loader2, Download } from 'lucide-react';
+import { Upload, Play, Square, FileText, Clock, Eye, Bell, BellOff, Trash2, BookOpen, Loader2, Download, Heart, Activity } from 'lucide-react';
 import ReminderPopup from '@/components/ReminderPopup';
 import * as XLSX from 'xlsx';
 
@@ -48,10 +48,17 @@ export default function Home() {
   const [fileMode, setFileMode] = useState<'reminder' | 'book'>('reminder');
   const [extractedKeyPoints, setExtractedKeyPoints] = useState<string[]>([]);
   
+  // 久坐提醒相关状态
+  const [healthReminderEnabled, setHealthReminderEnabled] = useState(false);
+  const [showHealthPopup, setShowHealthPopup] = useState(false);
+  const [healthPopupKey, setHealthPopupKey] = useState(0);
+  
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const healthTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const healthPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // 使用 ref 存储最新值
   const remindersRef = useRef<string[]>([]);
@@ -507,6 +514,84 @@ export default function Home() {
     setCountdown(0);
   }, []);
 
+  // 久坐提醒内容列表
+  const healthReminders = [
+    '🧘 该休息一下了！站起来活动活动，伸个懒腰吧~',
+    '👀 眼睛需要休息啦！看看远处的绿色植物，让眼睛放松一下~',
+    '🚶 久坐提醒：站起来走几步，活动一下筋骨！',
+    '💧 记得喝口水，保持身体水分充足哦~',
+    '🌿 深呼吸一下，让大脑和身体都放松放松~',
+    '🏃 该动一动了！做几个简单的拉伸动作吧~',
+    '👁️ 20-20-20法则：每20分钟看20英尺外的东西20秒~',
+    '☕ 休息时间到！站起来接杯水或者上个厕所吧~',
+  ];
+
+  // 显示久坐提醒
+  const showHealthReminder = useCallback(() => {
+    const randomIndex = Math.floor(Math.random() * healthReminders.length);
+    setCurrentReminder(healthReminders[randomIndex]);
+    setHealthPopupKey(prev => prev + 1);
+    setShowHealthPopup(true);
+    
+    // 发送系统通知
+    if (notificationPermission === 'granted') {
+      const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
+      const imageUrl = getBackgroundUrl(randomFile);
+      
+      try {
+        new Notification('💚 久坐提醒', {
+          body: healthReminders[randomIndex],
+          icon: imageUrl,
+          tag: 'health-reminder',
+          requireInteraction: true,
+        });
+      } catch (error) {
+        console.error('系统通知失败:', error);
+      }
+    }
+    
+    // 20秒后自动关闭
+    if (healthPopupTimerRef.current) {
+      clearTimeout(healthPopupTimerRef.current);
+    }
+    healthPopupTimerRef.current = setTimeout(() => {
+      setShowHealthPopup(false);
+    }, 20 * 1000);
+  }, [healthReminders, notificationPermission]);
+
+  // 开启/关闭久坐提醒
+  const toggleHealthReminder = useCallback(() => {
+    if (!healthReminderEnabled) {
+      // 开启
+      setHealthReminderEnabled(true);
+      
+      // 立即显示一次
+      setTimeout(() => showHealthReminder(), 1000);
+      
+      // 每20分钟提醒一次
+      healthTimerRef.current = setInterval(() => {
+        showHealthReminder();
+      }, 20 * 60 * 1000);
+      
+      console.log('💚 久坐提醒已开启');
+    } else {
+      // 关闭
+      setHealthReminderEnabled(false);
+      setShowHealthPopup(false);
+      
+      if (healthTimerRef.current) {
+        clearInterval(healthTimerRef.current);
+        healthTimerRef.current = null;
+      }
+      if (healthPopupTimerRef.current) {
+        clearTimeout(healthPopupTimerRef.current);
+        healthPopupTimerRef.current = null;
+      }
+      
+      console.log('💔 久坐提醒已关闭');
+    }
+  }, [healthReminderEnabled, showHealthReminder]);
+
   // 关闭弹窗
   const handleClosePopup = useCallback(() => {
     console.log('✖️ Popup closed by user');
@@ -523,6 +608,8 @@ export default function Home() {
       if (timerRef.current) clearInterval(timerRef.current);
       if (popupTimerRef.current) clearTimeout(popupTimerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (healthTimerRef.current) clearInterval(healthTimerRef.current);
+      if (healthPopupTimerRef.current) clearTimeout(healthPopupTimerRef.current);
     };
   }, []);
 
@@ -791,6 +878,49 @@ export default function Home() {
           </CardContent>
         </Card>
 
+        {/* 久坐提醒卡片 */}
+        <Card className="mt-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Heart className="w-5 h-5 text-pink-500" />
+              久坐/望远提醒
+            </CardTitle>
+            <CardDescription>每20分钟提醒您休息一下，保护眼睛和身体健康</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Activity className={`w-8 h-8 ${healthReminderEnabled ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
+                <div>
+                  <p className="font-medium">
+                    {healthReminderEnabled ? '久坐提醒已开启' : '久坐提醒已关闭'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    每20分钟弹窗提醒，显示20秒
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={toggleHealthReminder}
+                variant={healthReminderEnabled ? 'destructive' : 'default'}
+                className="gap-2"
+              >
+                {healthReminderEnabled ? (
+                  <>
+                    <Square className="w-4 h-4" />
+                    关闭
+                  </>
+                ) : (
+                  <>
+                    <Heart className="w-4 h-4" />
+                    开启
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* 提示信息 */}
         <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
           <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
@@ -813,6 +943,17 @@ export default function Home() {
           message={currentReminder}
           duration={displayDuration}
           onClose={handleClosePopup}
+        />
+      )}
+
+      {/* 久坐提醒弹窗 */}
+      {showHealthPopup && currentReminder && (
+        <ReminderPopup
+          key={`health-${healthPopupKey}`}
+          message={currentReminder}
+          duration={20}
+          onClose={() => setShowHealthPopup(false)}
+          isHealthReminder={true}
         />
       )}
     </div>
