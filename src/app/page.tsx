@@ -30,6 +30,18 @@ const backgroundFiles = [
 const bookFormats = ['pdf', 'epub', 'docx', 'doc'];
 const reminderFormats = ['txt', 'xlsx', 'xls'];
 
+// 久坐提醒内容列表
+const healthReminders = [
+  '🧘 该休息一下了！站起来活动活动，伸个懒腰吧~',
+  '👀 眼睛需要休息啦！看看远处的绿色植物，让眼睛放松一下~',
+  '🚶 久坐提醒：站起来走几步，活动一下筋骨！',
+  '💧 记得喝口水，保持身体水分充足哦~',
+  '🌿 深呼吸一下，让大脑和身体都放松放松~',
+  '🏃 该动一动了！做几个简单的拉伸动作吧~',
+  '👁️ 20-20-20法则：每20分钟看20英尺外的东西20秒~',
+  '☕ 休息时间到！站起来接杯水或者上个厕所吧~',
+];
+
 export default function Home() {
   const [intervalMinutes, setIntervalMinutes] = useState(5);
   const [displayDuration, setDisplayDuration] = useState(20);
@@ -70,6 +82,7 @@ export default function Home() {
   const intervalMinutesRef = useRef<number>(5);
   const healthIntervalMinutesRef = useRef<number>(20);
   const healthDisplayDurationRef = useRef<number>(20);
+  const showHealthReminderRef = useRef<() => void>(() => {});
 
   // 同步 ref 值
   useEffect(() => {
@@ -528,18 +541,6 @@ export default function Home() {
     setCountdown(0);
   }, []);
 
-  // 久坐提醒内容列表
-  const healthReminders = [
-    '🧘 该休息一下了！站起来活动活动，伸个懒腰吧~',
-    '👀 眼睛需要休息啦！看看远处的绿色植物，让眼睛放松一下~',
-    '🚶 久坐提醒：站起来走几步，活动一下筋骨！',
-    '💧 记得喝口水，保持身体水分充足哦~',
-    '🌿 深呼吸一下，让大脑和身体都放松放松~',
-    '🏃 该动一动了！做几个简单的拉伸动作吧~',
-    '👁️ 20-20-20法则：每20分钟看20英尺外的东西20秒~',
-    '☕ 休息时间到！站起来接杯水或者上个厕所吧~',
-  ];
-
   // 显示久坐提醒
   const showHealthReminder = useCallback(() => {
     const randomIndex = Math.floor(Math.random() * healthReminders.length);
@@ -569,7 +570,10 @@ export default function Home() {
     healthPopupTimerRef.current = setTimeout(() => {
       setShowHealthPopup(false);
     }, duration * 1000);
-  }, [healthReminders, notificationPermission]);
+  }, [notificationPermission]);
+
+  // 保持 ref 最新
+  showHealthReminderRef.current = showHealthReminder;
 
   // 开启/关闭久坐提醒
   const toggleHealthReminder = useCallback(() => {
@@ -578,7 +582,7 @@ export default function Home() {
       setHealthReminderEnabled(true);
       
       // 立即显示一次
-      setTimeout(() => showHealthReminder(), 1000);
+      setTimeout(() => showHealthReminderRef.current(), 1000);
       
       // 使用配置的间隔
       const intervalMinutes = healthIntervalMinutesRef.current;
@@ -588,7 +592,7 @@ export default function Home() {
       setHealthCountdown(intervalMinutes * 60);
       
       healthTimerRef.current = setInterval(() => {
-        showHealthReminder();
+        showHealthReminderRef.current();
         // 重置倒计时
         setHealthCountdown(intervalMinutes * 60);
       }, intervalMs);
@@ -625,7 +629,7 @@ export default function Home() {
       
       console.log('💔 久坐提醒已关闭');
     }
-  }, [healthReminderEnabled, showHealthReminder]);
+  }, [healthReminderEnabled]);
 
   // 关闭弹窗
   const handleClosePopup = useCallback(() => {
