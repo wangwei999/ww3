@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 
-// 解析PDF
+// 解析PDF - 使用 pdf-parse 1.x 版本
 async function parsePDF(buffer: Buffer): Promise<string> {
-  // pdf-parse 新版本 API
-  const pdfParse = await import('pdf-parse');
-  const PDFParse = (pdfParse as unknown as { PDFParse: new () => { load: (buf: Buffer) => Promise<void>; getText: () => Promise<string> } }).PDFParse;
-  const parser = new PDFParse();
-  await parser.load(buffer);
-  return await parser.getText();
+  try {
+    const pdfParse = await import('pdf-parse');
+    const parse = (pdfParse as unknown as { default?: typeof pdfParse }).default || pdfParse;
+    // pdf-parse 需要传入选项，禁用测试数据
+    const data = await parse(buffer as Parameters<typeof parse>[0], { 
+      pagerender: undefined,
+      max: 0,  // 不限制页数
+      version: undefined 
+    } as Parameters<typeof parse>[1]);
+    return (data as { text: string }).text;
+  } catch (error) {
+    console.error('PDF解析错误:', error);
+    throw new Error(`PDF解析失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  }
 }
 
 // 解析EPUB
@@ -78,18 +86,23 @@ ${truncatedText}
 
   const messages = [{ role: 'user' as const, content: prompt }];
   
-  const response = await client.invoke(messages, {
-    model: 'doubao-seed-1-8-251228',
-    temperature: 0.7,
-  });
-  
-  // 解析结果，每行作为一个要点
-  const lines = response.content
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0 && !line.match(/^[\d\-•\.\)]+\s*/)); // 过滤空行和纯序号行
-  
-  return lines;
+  try {
+    const response = await client.invoke(messages, {
+      model: 'doubao-seed-1-6-lite-251015',
+      temperature: 0.7,
+    });
+    
+    // 解析结果，每行作为一个要点
+    const lines = response.content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0 && !line.match(/^[\d\-•\.\)]+\s*/));
+    
+    return lines;
+  } catch (error) {
+    console.error('LLM调用失败:', error);
+    throw new Error(`AI提取失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -119,6 +132,10 @@ export async function POST(request: NextRequest) {
       case 'docx':
       case 'doc':
         text = await parseDOCX(buffer);
+        break;
+      case 'txt':
+        // 也支持TXT用于测试
+        text = buffer.toString('utf-8');
         break;
       default:
         return NextResponse.json({ error: '不支持的文件格式' }, { status: 400 });

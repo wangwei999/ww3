@@ -165,11 +165,20 @@ export default function Home() {
         body: formData,
       });
       
-      const result = await response.json();
-      
+      // 先检查响应状态，再解析 JSON
       if (!response.ok) {
-        throw new Error(result.error || '处理失败');
+        const text = await response.text();
+        let errorMsg = '处理失败';
+        try {
+          const errorData = JSON.parse(text);
+          errorMsg = errorData.error || errorMsg;
+        } catch {
+          errorMsg = text || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
+      
+      const result = await response.json();
       
       setExtractProgress('提取完成！');
       setExtractedKeyPoints(result.keyPoints);
