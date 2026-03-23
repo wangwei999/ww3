@@ -83,6 +83,7 @@ export default function Home() {
   const intervalMinutesRef = useRef<number>(5);
   const healthIntervalMinutesRef = useRef<number>(20);
   const healthDisplayDurationRef = useRef<number>(20);
+  const showHealthPopupRef = useRef<boolean>(false);
   const sendSystemNotificationRef = useRef<(message: string, title?: string) => void>(() => {});
 
   // 同步 ref 值
@@ -105,6 +106,10 @@ export default function Home() {
   useEffect(() => {
     healthDisplayDurationRef.current = healthDisplayDuration;
   }, [healthDisplayDuration]);
+
+  useEffect(() => {
+    showHealthPopupRef.current = showHealthPopup;
+  }, [showHealthPopup]);
 
   // 检查通知权限
   useEffect(() => {
@@ -442,6 +447,12 @@ export default function Home() {
       return;
     }
     
+    // 如果久坐提醒正在显示，跳过文件上传模式的提醒（久坐优先）
+    if (showHealthPopupRef.current) {
+      console.log('💚 久坐提醒正在显示，跳过文件上传提醒');
+      return;
+    }
+    
     setShowPopup(false);
     
     if (popupTimerRef.current) {
@@ -450,6 +461,12 @@ export default function Home() {
     }
     
     setTimeout(() => {
+      // 再次检查久坐提醒是否正在显示（使用 ref 获取最新值）
+      if (showHealthPopupRef.current) {
+        console.log('💚 久坐提醒正在显示，跳过文件上传提醒');
+        return;
+      }
+      
       const randomIndex = Math.floor(Math.random() * currentReminders.length);
       const selectedReminder = currentReminders[randomIndex];
       console.log('📝 Selected reminder:', selectedReminder);
@@ -611,10 +628,17 @@ export default function Home() {
         const reminder = healthReminders[randomIndex];
         console.log('📝 提醒内容:', reminder);
         
+        // 久坐提醒优先：关闭文件上传模式的弹窗
+        setShowPopup(false);
+        if (popupTimerRef.current) {
+          clearTimeout(popupTimerRef.current);
+          popupTimerRef.current = null;
+        }
+        
         setHealthReminder(reminder);
         setHealthPopupKey(prev => prev + 1);
         setShowHealthPopup(true);
-        console.log('✅ setShowHealthPopup(true) 已调用');
+        console.log('✅ setShowHealthPopup(true) 已调用，已关闭文件上传模式弹窗');
         
         // 发送系统通知（和文件上传模式一样调用 sendSystemNotification）
         sendSystemNotificationRef.current(reminder, '💚 久坐提醒');
