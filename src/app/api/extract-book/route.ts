@@ -3,9 +3,12 @@ import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 
 // 解析PDF
 async function parsePDF(buffer: Buffer): Promise<string> {
-  const pdfParse = (await import('pdf-parse')).default;
-  const data = await pdfParse(buffer);
-  return data.text;
+  // pdf-parse 新版本 API
+  const pdfParse = await import('pdf-parse');
+  const PDFParse = (pdfParse as unknown as { PDFParse: new () => { load: (buf: Buffer) => Promise<void>; getText: () => Promise<string> } }).PDFParse;
+  const parser = new PDFParse();
+  await parser.load(buffer);
+  return await parser.getText();
 }
 
 // 解析EPUB
