@@ -564,12 +564,19 @@ export default function Home() {
       }
     }
     
+    // 清理旧的定时器
+    if (healthPopupTimerRef.current) {
+      clearTimeout(healthPopupTimerRef.current);
+    }
+    
     // 使用配置的显示时长
     const duration = healthDisplayDurationRef.current;
+    console.log(`⏰ 设置弹窗自动关闭: ${duration}秒后`);
     healthPopupTimerRef.current = setTimeout(() => {
+      console.log('⏰ 弹窗自动关闭');
       setShowHealthPopup(false);
     }, duration * 1000);
-  }, [healthReminders, notificationPermission]);
+  }, [healthReminders, notificationPermission, backgroundFiles]);
 
   // 开启/关闭久坐提醒
   const toggleHealthReminder = useCallback(() => {
