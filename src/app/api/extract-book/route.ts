@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import { LLMClient, Config, HeaderUtils, S3Storage } from 'coze-coding-dev-sdk';
 
 // 配置运行时选项
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // 增加执行时间限制
+export const maxDuration = 60;
+
+// 初始化对象存储
+const storage = new S3Storage({
+  endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
+  accessKey: "",
+  secretKey: "",
+  bucketName: process.env.COZE_BUCKET_NAME,
+  region: "cn-beijing",
+});
 
 // 解析PDF - 使用 pdf-parse 1.x 版本
 async function parsePDF(buffer: Buffer): Promise<string> {
@@ -118,23 +127,55 @@ ${truncatedText}
 }
 
 export async function POST(request: NextRequest) {
+  let storageKey: string | null = null;
+  
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const fileType = formData.get('fileType') as string;
+    const contentType = request.headers.get('content-type') || '';
+    let file: File | null = null;
+    let fileType: string = '';
+    let storageKeyParam: string | null = null;
     
-    if (!file) {
-      return NextResponse.json({ error: '未找到文件' }, { status: 400 });
+    // 根据请求类型解析参数
+    if (contentType.includes('application/json')) {
+      // JSON 格式请求（大文件通过对象存储）
+      const body = await request.json();
+      storageKeyParam = body.storageKey || null;
+      fileType = body.fileType || '';
+    } else {
+      // FormData 格式请求（小文件直接上传）
+      const formData = await request.formData();
+      file = formData.get('file') as File | null;
+      fileType = formData.get('fileType') as string || '';
+      storageKeyParam = formData.get('storageKey') as string | null;
     }
     
-    // 读取文件内容
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    let buffer: Buffer;
+    let actualFileType = fileType;
+    
+    // 方式1：从对象存储读取（推荐，用于大文件）
+    if (storageKeyParam) {
+      console.log('从对象存储读取文件:', storageKeyParam);
+      buffer = await storage.readFile({ fileKey: storageKeyParam });
+      storageKey = storageKeyParam;
+      
+      // 从文件名推断类型（如果未提供）
+      if (!actualFileType && storageKeyParam.includes('.')) {
+        actualFileType = storageKeyParam.split('.').pop()?.toLowerCase() || '';
+      }
+    }
+    // 方式2：直接上传（兼容小文件）
+    else if (file) {
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    }
+    else {
+      return NextResponse.json({ error: '未找到文件或存储密钥' }, { status: 400 });
+    }
     
     let text = '';
     
     // 根据文件类型解析
-    switch (fileType.toLowerCase()) {
+    switch (actualFileType?.toLowerCase()) {
       case 'pdf':
         text = await parsePDF(buffer);
         break;
@@ -146,7 +187,6 @@ export async function POST(request: NextRequest) {
         text = await parseDOCX(buffer);
         break;
       case 'txt':
-        // 也支持TXT用于测试
         text = buffer.toString('utf-8');
         break;
       default:
@@ -163,6 +203,16 @@ export async function POST(request: NextRequest) {
     // 使用AI提取要点和金句
     const keyPoints = await extractKeyPoints(text, customHeaders);
     
+    // 处理完成后删除临时文件
+    if (storageKey) {
+      try {
+        await storage.deleteFile({ fileKey: storageKey });
+        console.log('已删除临时文件:', storageKey);
+      } catch (e) {
+        console.warn('删除临时文件失败:', e);
+      }
+    }
+    
     return NextResponse.json({
       success: true,
       keyPoints,
@@ -171,6 +221,16 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('提取失败:', error);
+    
+    // 出错时也尝试删除临时文件
+    if (storageKey) {
+      try {
+        await storage.deleteFile({ fileKey: storageKey });
+      } catch (e) {
+        console.warn('删除临时文件失败:', e);
+      }
+    }
+    
     return NextResponse.json(
       { error: `处理失败: ${error instanceof Error ? error.message : '未知错误'}` },
       { status: 500 }

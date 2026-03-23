@@ -149,10 +149,10 @@ export default function Home() {
 
   // 处理电子书文件（拆书功能）
   const handleBookFile = useCallback(async (file: File) => {
-    // 检查文件大小（限制 30MB）
-    const maxSize = 30 * 1024 * 1024; // 30MB
+    // 检查文件大小（限制 50MB）
+    const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
-      alert(`文件过大，请上传小于 30MB 的文件。\n当前文件大小: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      alert(`文件过大，请上传小于 50MB 的文件。\n当前文件大小: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
       return;
     }
     
@@ -161,21 +161,107 @@ export default function Home() {
     setFileMode('book');
     
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('fileType', file.name.split('.').pop()?.toLowerCase() || '');
+      const fileType = file.name.split('.').pop()?.toLowerCase() || '';
       
+      // 大文件（>5MB）使用分块上传
+      const useChunkedUpload = file.size > 5 * 1024 * 1024;
+      
+      let storageKey: string | null = null;
+      
+      if (useChunkedUpload) {
+        // 分块上传
+        setExtractProgress('正在上传文件（分块上传）...');
+        
+        const chunkSize = 2 * 1024 * 1024; // 2MB 每块
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        
+        // 步骤1：初始化上传
+        const initResponse = await fetch('/api/upload-file/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileSize: file.size,
+            totalChunks,
+          }),
+        });
+        
+        if (!initResponse.ok) {
+          throw new Error('初始化上传失败');
+        }
+        
+        const { uploadId, key } = await initResponse.json();
+        storageKey = key;
+        
+        // 步骤2：上传每个分块
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, file.size);
+          const chunk = file.slice(start, end);
+          
+          setExtractProgress(`正在上传: ${Math.round((i + 1) / totalChunks * 100)}%`);
+          
+          const chunkFormData = new FormData();
+          chunkFormData.append('chunk', chunk);
+          chunkFormData.append('uploadId', uploadId);
+          chunkFormData.append('chunkIndex', String(i));
+          chunkFormData.append('totalChunks', String(totalChunks));
+          
+          const chunkResponse = await fetch('/api/upload-file/chunk', {
+            method: 'POST',
+            body: chunkFormData,
+          });
+          
+          if (!chunkResponse.ok) {
+            throw new Error(`上传分块 ${i + 1} 失败`);
+          }
+        }
+        
+        // 步骤3：完成上传
+        const completeResponse = await fetch('/api/upload-file/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId, key }),
+        });
+        
+        if (!completeResponse.ok) {
+          throw new Error('完成上传失败');
+        }
+        
+        console.log(`分块上传完成: ${key}`);
+      }
+      
+      // 步骤4：调用处理 API
       setExtractProgress('正在解析内容...');
       
-      // 使用 AbortController 设置超时（5分钟）
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
       
-      const response = await fetch('/api/extract-book', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
-      });
+      let response: Response;
+      
+      if (storageKey) {
+        // 通过对象存储 key 处理
+        response = await fetch('/api/extract-book', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storageKey,
+            fileType,
+          }),
+          signal: controller.signal,
+        });
+      } else {
+        // 小文件直接上传处理
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('fileType', fileType);
+        
+        response = await fetch('/api/extract-book', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+      }
       
       clearTimeout(timeoutId);
       
