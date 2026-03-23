@@ -14,11 +14,13 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Next.js 15+ / 16 统一使用此配置增加请求体大小限制
+  // Next.js 16+ 请求体大小限制配置
   experimental: {
     serverActions: {
       bodySizeLimit: '50mb',
     },
+    // 这是 Next.js 16 新增的配置项，用于 API Routes
+    proxyClientMaxBodySize: '50mb',
   },
 };
 
