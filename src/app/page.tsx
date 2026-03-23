@@ -83,6 +83,7 @@ export default function Home() {
   const intervalMinutesRef = useRef<number>(5);
   const healthIntervalMinutesRef = useRef<number>(20);
   const healthDisplayDurationRef = useRef<number>(20);
+  const notificationPermissionRef = useRef<NotificationPermission>('default');
 
   // 同步 ref 值
   useEffect(() => {
@@ -104,6 +105,10 @@ export default function Home() {
   useEffect(() => {
     healthDisplayDurationRef.current = healthDisplayDuration;
   }, [healthDisplayDuration]);
+
+  useEffect(() => {
+    notificationPermissionRef.current = notificationPermission;
+  }, [notificationPermission]);
 
   // 检查通知权限
   useEffect(() => {
@@ -583,6 +588,14 @@ export default function Home() {
       // 开启
       setHealthReminderEnabled(true);
       
+      // 检查通知权限
+      if (notificationPermission !== 'granted') {
+        const shouldRequest = confirm('建议开启系统通知权限，这样右下角也能收到提醒通知。\n\n是否现在开启？');
+        if (shouldRequest) {
+          requestNotificationPermission();
+        }
+      }
+      
       // 使用配置的间隔
       const intervalMinutes = healthIntervalMinutesRef.current;
       const intervalMs = intervalMinutes * 60 * 1000;
@@ -604,21 +617,31 @@ export default function Home() {
         setShowHealthPopup(true);
         console.log('✅ setShowHealthPopup(true) 已调用');
         
-        // 发送系统通知
-        if (notificationPermission === 'granted') {
+        // 发送系统通知（右下角弹窗）
+        if (notificationPermissionRef.current === 'granted') {
           const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
           const imageUrl = getBackgroundUrl(randomFile);
           
           try {
-            new Notification('💚 久坐提醒', {
+            const notification = new Notification('💚 久坐提醒', {
               body: reminder,
               icon: imageUrl,
               tag: 'health-reminder',
               requireInteraction: true,
             });
+            
+            // 点击通知时聚焦窗口
+            notification.onclick = () => {
+              window.focus();
+              notification.close();
+            };
+            
+            console.log('🔔 久坐提醒系统通知已发送');
           } catch (error) {
             console.error('系统通知失败:', error);
           }
+        } else {
+          console.log('⚠️ 通知权限未授权，跳过系统通知');
         }
         
         // 自动关闭
@@ -671,7 +694,7 @@ export default function Home() {
       
       console.log('💔 久坐提醒已关闭');
     }
-  }, [healthReminderEnabled, notificationPermission]);
+  }, [healthReminderEnabled, notificationPermission, requestNotificationPermission]);
 
   // 关闭弹窗
   const handleClosePopup = useCallback(() => {
