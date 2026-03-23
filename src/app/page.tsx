@@ -555,20 +555,29 @@ export default function Home() {
     setShowHealthPopup(true);
     console.log('✅ setShowHealthPopup(true) 已调用');
     
-    // 发送系统通知
-    if (notificationPermission === 'granted') {
-      const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
-      const imageUrl = getBackgroundUrl(randomFile);
+    // 发送系统通知 - 直接检查实时权限状态
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const currentPermission = Notification.permission;
+      console.log('🔔 当前通知权限:', currentPermission);
       
-      try {
-        new Notification('💚 久坐提醒', {
-          body: reminder,
-          icon: imageUrl,
-          tag: 'health-reminder',
-          requireInteraction: true,
-        });
-      } catch (error) {
-        console.error('系统通知失败:', error);
+      if (currentPermission === 'granted') {
+        const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
+        const imageUrl = getBackgroundUrl(randomFile);
+        
+        try {
+          console.log('📤 发送系统通知...');
+          const notification = new Notification('💚 久坐提醒', {
+            body: reminder,
+            icon: imageUrl,
+            tag: 'health-reminder',
+            requireInteraction: true,
+          });
+          console.log('✅ 系统通知已发送:', notification);
+        } catch (error) {
+          console.error('❌ 系统通知失败:', error);
+        }
+      } else {
+        console.log('⚠️ 通知权限未授权，跳过系统通知');
       }
     }
     
@@ -584,11 +593,30 @@ export default function Home() {
       console.log('⏰ 弹窗自动关闭');
       setShowHealthPopup(false);
     }, duration * 1000);
-  }, [healthReminders, notificationPermission, backgroundFiles]);
+  }, [healthReminders, backgroundFiles]);
 
   // 开启/关闭久坐提醒
   const toggleHealthReminder = useCallback(() => {
     if (!healthReminderEnabled) {
+      // 检查系统通知权限 - 直接检查实时状态
+      const currentPermission = typeof window !== 'undefined' && 'Notification' in window 
+        ? Notification.permission 
+        : 'denied';
+      
+      if (currentPermission !== 'granted') {
+        const shouldRequest = confirm('建议开启系统通知权限，这样即使浏览器最小化也能收到久坐提醒。\n\n是否现在开启？');
+        if (shouldRequest) {
+          Notification.requestPermission().then((permission) => {
+            setNotificationPermission(permission);
+            if (permission === 'granted') {
+              console.log('✅ 通知权限已授权');
+            } else if (permission === 'denied') {
+              alert('通知权限被拒绝，您将无法在浏览器最小化时收到提醒。\n请在浏览器设置中允许通知。');
+            }
+          });
+        }
+      }
+      
       // 开启
       setHealthReminderEnabled(true);
       
