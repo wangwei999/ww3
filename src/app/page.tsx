@@ -228,7 +228,11 @@ export default function Home() {
           throw new Error('完成上传失败');
         }
         
-        console.log(`分块上传完成: ${key}`);
+        const completeResult = await completeResponse.json();
+        // 使用实际返回的 key（SDK 会添加 UUID 前缀）
+        storageKey = completeResult.key;
+        
+        console.log(`分块上传完成，实际 key: ${storageKey}`);
       }
       
       // 步骤4：调用处理 API
