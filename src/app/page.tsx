@@ -67,6 +67,7 @@ export default function Home() {
   const [showHealthPopup, setShowHealthPopup] = useState(false);
   const [healthPopupKey, setHealthPopupKey] = useState(0);
   const [healthCountdown, setHealthCountdown] = useState<number>(0);
+  const [healthReminder, setHealthReminder] = useState<string>('');
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -544,7 +545,8 @@ export default function Home() {
   // 显示久坐提醒
   const showHealthReminder = useCallback(() => {
     const randomIndex = Math.floor(Math.random() * healthReminders.length);
-    setCurrentReminder(healthReminders[randomIndex]);
+    const reminder = healthReminders[randomIndex];
+    setHealthReminder(reminder);
     setHealthPopupKey(prev => prev + 1);
     setShowHealthPopup(true);
     
@@ -555,7 +557,7 @@ export default function Home() {
       
       try {
         new Notification('💚 久坐提醒', {
-          body: healthReminders[randomIndex],
+          body: reminder,
           icon: imageUrl,
           tag: 'health-reminder',
           requireInteraction: true,
@@ -1042,10 +1044,10 @@ export default function Home() {
       )}
 
       {/* 久坐提醒弹窗 */}
-      {showHealthPopup && currentReminder && (
+      {showHealthPopup && healthReminder && (
         <ReminderPopup
           key={`health-${healthPopupKey}`}
-          message={currentReminder}
+          message={healthReminder}
           duration={healthDisplayDuration}
           onClose={() => setShowHealthPopup(false)}
           isHealthReminder={true}
