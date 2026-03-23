@@ -944,7 +944,7 @@ export default function Home() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[5, 10, 15, 20, 25, 30, 45, 60].map(min => (
+                    {[1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60].map(min => (
                       <SelectItem key={min} value={min.toString()}>
                         {min} 分钟
                       </SelectItem>
