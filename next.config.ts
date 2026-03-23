@@ -14,16 +14,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // 增加请求体大小限制 - 对 API Routes 和 Server Actions 都有效
+  // Next.js 15+ / 16 统一使用此配置增加请求体大小限制
   experimental: {
     serverActions: {
       bodySizeLimit: '50mb',
-    },
-  },
-  // API Routes 请求体大小限制
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
     },
   },
 };

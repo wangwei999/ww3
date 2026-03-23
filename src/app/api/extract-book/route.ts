@@ -1,65 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 
-// 配置运行时选项 - 增加请求体大小限制
+// 配置运行时选项
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // 增加执行时间限制
 
 // 解析PDF - 使用 pdf-parse 1.x 版本
 async function parsePDF(buffer: Buffer): Promise<string> {
   try {
-    const pdfParse = await import('pdf-parse');
-    const parse = (pdfParse as unknown as { default?: typeof pdfParse }).default || pdfParse;
-    // pdf-parse 需要传入选项，禁用测试数据
-    const data = await parse(buffer as Parameters<typeof parse>[0], { 
-      pagerender: undefined,
-      max: 0,  // 不限制页数
-      version: undefined 
-    } as Parameters<typeof parse>[1]);
-    return (data as { text: string }).text;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse');
+    const data = await pdfParse(buffer);
+    return data.text || '';
   } catch (error) {
     console.error('PDF解析错误:', error);
     throw new Error(`PDF解析失败: ${error instanceof Error ? error.message : '未知错误'}`);
   }
 }
 
-// 解析EPUB
+// 解析EPUB - 使用 epub 2.x Promise-based API
 async function parseEPUB(buffer: Buffer): Promise<string> {
-  const EPub = (await import('epub')).default;
-  const epub = new EPub(buffer);
-  
-  return new Promise((resolve, reject) => {
+  try {
+    const EPubModule = await import('epub');
+    const EPub = EPubModule.default || EPubModule;
+    
+    // 创建 EPub 实例
+    const epub = new EPub(buffer, '/images/', '/chapters/');
+    
+    // 使用 Promise-based API 解析
+    await epub.parse();
+    
     let fullText = '';
-    let pendingCount = 0;
     
-    epub.on('end', () => {
-      // 使用 spine.contents 获取章节列表
-      const chapters = epub.spine.contents;
-      if (!chapters || chapters.length === 0) {
-        resolve(fullText);
-        return;
+    // 获取章节列表
+    const chapters = epub.spine?.contents || epub.flow || [];
+    
+    if (chapters.length === 0) {
+      return fullText;
+    }
+    
+    // 逐个获取章节内容
+    for (const item of chapters) {
+      try {
+        const chapterId = item.id || item.href;
+        if (!chapterId) continue;
+        
+        const data = await epub.getChapter(chapterId);
+        if (data) {
+          // 移除HTML标签
+          const text = data.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+          fullText += text + '\n';
+        }
+      } catch (chapterError) {
+        console.warn('章节解析失败:', chapterError);
       }
-      
-      pendingCount = chapters.length;
-      
-      chapters.forEach((item: { id: string }) => {
-        epub.getChapter(item.id, (err: Error | null, data: string) => {
-          if (!err && data) {
-            // 移除HTML标签
-            const text = data.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
-            fullText += text + '\n';
-          }
-          pendingCount--;
-          if (pendingCount === 0) {
-            resolve(fullText);
-          }
-        });
-      });
-    });
+    }
     
-    epub.on('error', reject);
-    epub.parse();
-  });
+    return fullText;
+  } catch (error) {
+    console.error('EPUB解析错误:', error);
+    throw new Error(`EPUB解析失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  }
 }
 
 // 解析DOCX
@@ -96,11 +98,17 @@ ${truncatedText}
       temperature: 0.7,
     });
     
+    console.log('LLM原始响应:', response.content?.slice(0, 500));
+    
     // 解析结果，每行作为一个要点
+    // 先移除序号前缀，再过滤空行
     const lines = response.content
       .split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 0 && !line.match(/^[\d\-•\.\)]+\s*/));
+      .map(line => line.replace(/^[\d\-•\.\)、]+\s*/, '').trim()) // 移除序号前缀
+      .filter(line => line.length > 5); // 过滤太短的行
+    
+    console.log('解析后的要点数量:', lines.length);
     
     return lines;
   } catch (error) {
