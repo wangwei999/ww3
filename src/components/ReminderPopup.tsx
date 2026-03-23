@@ -73,10 +73,10 @@ export default function ReminderPopup({ message, duration, onClose, isHealthRemi
 
   return (
     <div
-      className={`fixed bottom-8 right-8 z-50 transition-all duration-300 ease-out ${
+      className={`fixed bottom-8 left-8 z-50 transition-all duration-300 ease-out ${
         isVisible 
           ? 'translate-x-0 opacity-100 scale-100' 
-          : 'translate-x-full opacity-0 scale-95'
+          : '-translate-x-full opacity-0 scale-95'
       }`}
     >
       <div className="relative w-[28rem] h-72 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/20">

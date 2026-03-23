@@ -542,103 +542,52 @@ export default function Home() {
 
   // 显示久坐提醒
   const showHealthReminder = useCallback(() => {
-    console.log('🚀 showHealthReminder 被调用');
     const randomIndex = Math.floor(Math.random() * healthReminders.length);
-    const reminder = healthReminders[randomIndex];
-    console.log('📝 提醒内容:', reminder);
-    
-    setCurrentReminder(reminder);
-    setHealthPopupKey(prev => {
-      console.log('🔑 healthPopupKey 更新:', prev, '->', prev + 1);
-      return prev + 1;
-    });
+    setCurrentReminder(healthReminders[randomIndex]);
+    setHealthPopupKey(prev => prev + 1);
     setShowHealthPopup(true);
-    console.log('✅ setShowHealthPopup(true) 已调用');
     
-    // 发送系统通知 - 直接检查实时权限状态
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      const currentPermission = Notification.permission;
-      console.log('🔔 当前通知权限:', currentPermission);
+    // 发送系统通知
+    if (notificationPermission === 'granted') {
+      const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
+      const imageUrl = getBackgroundUrl(randomFile);
       
-      if (currentPermission === 'granted') {
-        const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
-        const imageUrl = getBackgroundUrl(randomFile);
-        
-        try {
-          console.log('📤 发送系统通知...');
-          const notification = new Notification('💚 久坐提醒', {
-            body: reminder,
-            icon: imageUrl,
-            tag: 'health-reminder',
-            requireInteraction: true,
-          });
-          console.log('✅ 系统通知已发送:', notification);
-        } catch (error) {
-          console.error('❌ 系统通知失败:', error);
-        }
-      } else {
-        console.log('⚠️ 通知权限未授权，跳过系统通知');
+      try {
+        new Notification('💚 久坐提醒', {
+          body: healthReminders[randomIndex],
+          icon: imageUrl,
+          tag: 'health-reminder',
+          requireInteraction: true,
+        });
+      } catch (error) {
+        console.error('系统通知失败:', error);
       }
-    }
-    
-    // 清理旧的定时器
-    if (healthPopupTimerRef.current) {
-      clearTimeout(healthPopupTimerRef.current);
     }
     
     // 使用配置的显示时长
     const duration = healthDisplayDurationRef.current;
-    console.log(`⏰ 设置弹窗自动关闭: ${duration}秒后`);
     healthPopupTimerRef.current = setTimeout(() => {
-      console.log('⏰ 弹窗自动关闭');
       setShowHealthPopup(false);
     }, duration * 1000);
-  }, [healthReminders, backgroundFiles]);
+  }, [healthReminders, notificationPermission]);
 
   // 开启/关闭久坐提醒
   const toggleHealthReminder = useCallback(() => {
     if (!healthReminderEnabled) {
-      // 检查系统通知权限 - 直接检查实时状态
-      const currentPermission = typeof window !== 'undefined' && 'Notification' in window 
-        ? Notification.permission 
-        : 'denied';
-      
-      if (currentPermission !== 'granted') {
-        const shouldRequest = confirm('建议开启系统通知权限，这样即使浏览器最小化也能收到久坐提醒。\n\n是否现在开启？');
-        if (shouldRequest) {
-          Notification.requestPermission().then((permission) => {
-            setNotificationPermission(permission);
-            if (permission === 'granted') {
-              console.log('✅ 通知权限已授权');
-            } else if (permission === 'denied') {
-              alert('通知权限被拒绝，您将无法在浏览器最小化时收到提醒。\n请在浏览器设置中允许通知。');
-            }
-          });
-        }
-      }
-      
       // 开启
       setHealthReminderEnabled(true);
+      
+      // 立即显示一次
+      setTimeout(() => showHealthReminder(), 1000);
       
       // 使用配置的间隔
       const intervalMinutes = healthIntervalMinutesRef.current;
       const intervalMs = intervalMinutes * 60 * 1000;
       
-      console.log(`💚 久坐提醒已开启，间隔 ${intervalMinutes} 分钟 (${intervalMs}ms)`);
-      
       // 设置倒计时
       setHealthCountdown(intervalMinutes * 60);
       
-      // 立即显示一次（延迟100ms确保状态已更新）
-      console.log('⏳ 1秒后显示第一次提醒...');
-      setTimeout(() => {
-        console.log('🎯 触发第一次提醒');
-        showHealthReminder();
-      }, 1000);
-      
-      // 定时提醒
       healthTimerRef.current = setInterval(() => {
-        console.log('🔄 定时器触发，显示提醒');
         showHealthReminder();
         // 重置倒计时
         setHealthCountdown(intervalMinutes * 60);
@@ -654,6 +603,7 @@ export default function Home() {
         });
       }, 1000);
       
+      console.log(`💚 久坐提醒已开启，间隔 ${intervalMinutes} 分钟`);
     } else {
       // 关闭
       setHealthReminderEnabled(false);
@@ -987,7 +937,7 @@ export default function Home() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60].map(min => (
+                    {[5, 10, 15, 20, 25, 30, 45, 60].map(min => (
                       <SelectItem key={min} value={min.toString()}>
                         {min} 分钟
                       </SelectItem>
@@ -1088,21 +1038,15 @@ export default function Home() {
       )}
 
       {/* 久坐提醒弹窗 */}
-      {(() => {
-        // 调试日志
-        if (showHealthPopup) {
-          console.log('🟢 渲染久坐提醒弹窗:', { showHealthPopup, currentReminder, healthPopupKey });
-        }
-        return showHealthPopup && currentReminder && (
-          <ReminderPopup
-            key={`health-${healthPopupKey}`}
-            message={currentReminder}
-            duration={healthDisplayDuration}
-            onClose={() => setShowHealthPopup(false)}
-            isHealthReminder={true}
-          />
-        );
-      })()}
+      {showHealthPopup && currentReminder && (
+        <ReminderPopup
+          key={`health-${healthPopupKey}`}
+          message={currentReminder}
+          duration={healthDisplayDuration}
+          onClose={() => setShowHealthPopup(false)}
+          isHealthReminder={true}
+        />
+      )}
     </div>
   );
 }
