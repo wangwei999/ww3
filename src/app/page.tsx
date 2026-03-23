@@ -542,10 +542,18 @@ export default function Home() {
 
   // 显示久坐提醒
   const showHealthReminder = useCallback(() => {
+    console.log('🚀 showHealthReminder 被调用');
     const randomIndex = Math.floor(Math.random() * healthReminders.length);
-    setCurrentReminder(healthReminders[randomIndex]);
-    setHealthPopupKey(prev => prev + 1);
+    const reminder = healthReminders[randomIndex];
+    console.log('📝 提醒内容:', reminder);
+    
+    setCurrentReminder(reminder);
+    setHealthPopupKey(prev => {
+      console.log('🔑 healthPopupKey 更新:', prev, '->', prev + 1);
+      return prev + 1;
+    });
     setShowHealthPopup(true);
+    console.log('✅ setShowHealthPopup(true) 已调用');
     
     // 发送系统通知
     if (notificationPermission === 'granted') {
@@ -554,7 +562,7 @@ export default function Home() {
       
       try {
         new Notification('💚 久坐提醒', {
-          body: healthReminders[randomIndex],
+          body: reminder,
           icon: imageUrl,
           tag: 'health-reminder',
           requireInteraction: true,
@@ -584,17 +592,25 @@ export default function Home() {
       // 开启
       setHealthReminderEnabled(true);
       
-      // 立即显示一次
-      setTimeout(() => showHealthReminder(), 1000);
-      
       // 使用配置的间隔
       const intervalMinutes = healthIntervalMinutesRef.current;
       const intervalMs = intervalMinutes * 60 * 1000;
       
+      console.log(`💚 久坐提醒已开启，间隔 ${intervalMinutes} 分钟 (${intervalMs}ms)`);
+      
       // 设置倒计时
       setHealthCountdown(intervalMinutes * 60);
       
+      // 立即显示一次（延迟100ms确保状态已更新）
+      console.log('⏳ 1秒后显示第一次提醒...');
+      setTimeout(() => {
+        console.log('🎯 触发第一次提醒');
+        showHealthReminder();
+      }, 1000);
+      
+      // 定时提醒
       healthTimerRef.current = setInterval(() => {
+        console.log('🔄 定时器触发，显示提醒');
         showHealthReminder();
         // 重置倒计时
         setHealthCountdown(intervalMinutes * 60);
@@ -610,7 +626,6 @@ export default function Home() {
         });
       }, 1000);
       
-      console.log(`💚 久坐提醒已开启，间隔 ${intervalMinutes} 分钟`);
     } else {
       // 关闭
       setHealthReminderEnabled(false);
@@ -1045,15 +1060,21 @@ export default function Home() {
       )}
 
       {/* 久坐提醒弹窗 */}
-      {showHealthPopup && currentReminder && (
-        <ReminderPopup
-          key={`health-${healthPopupKey}`}
-          message={currentReminder}
-          duration={healthDisplayDuration}
-          onClose={() => setShowHealthPopup(false)}
-          isHealthReminder={true}
-        />
-      )}
+      {(() => {
+        // 调试日志
+        if (showHealthPopup) {
+          console.log('🟢 渲染久坐提醒弹窗:', { showHealthPopup, currentReminder, healthPopupKey });
+        }
+        return showHealthPopup && currentReminder && (
+          <ReminderPopup
+            key={`health-${healthPopupKey}`}
+            message={currentReminder}
+            duration={healthDisplayDuration}
+            onClose={() => setShowHealthPopup(false)}
+            isHealthReminder={true}
+          />
+        );
+      })()}
     </div>
   );
 }
