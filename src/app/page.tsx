@@ -83,7 +83,6 @@ export default function Home() {
   const intervalMinutesRef = useRef<number>(5);
   const healthIntervalMinutesRef = useRef<number>(20);
   const healthDisplayDurationRef = useRef<number>(20);
-  const showHealthReminderRef = useRef<() => void>(() => {});
 
   // 同步 ref 值
   useEffect(() => {
@@ -544,11 +543,15 @@ export default function Home() {
 
   // 显示久坐提醒
   const showHealthReminder = useCallback(() => {
+    console.log('🚀 showHealthReminder 被调用');
     const randomIndex = Math.floor(Math.random() * healthReminders.length);
     const reminder = healthReminders[randomIndex];
+    console.log('📝 提醒内容:', reminder);
+    
     setHealthReminder(reminder);
     setHealthPopupKey(prev => prev + 1);
     setShowHealthPopup(true);
+    console.log('✅ setShowHealthPopup(true) 已调用');
     
     // 发送系统通知
     if (notificationPermission === 'granted') {
@@ -574,28 +577,66 @@ export default function Home() {
     }, duration * 1000);
   }, [notificationPermission]);
 
-  // 保持 ref 最新
-  showHealthReminderRef.current = showHealthReminder;
-
   // 开启/关闭久坐提醒
   const toggleHealthReminder = useCallback(() => {
     if (!healthReminderEnabled) {
       // 开启
       setHealthReminderEnabled(true);
       
-      // 立即显示一次
-      setTimeout(() => showHealthReminderRef.current(), 1000);
-      
       // 使用配置的间隔
       const intervalMinutes = healthIntervalMinutesRef.current;
       const intervalMs = intervalMinutes * 60 * 1000;
       
+      console.log(`💚 久坐提醒已开启，间隔 ${intervalMinutes} 分钟`);
+      
       // 设置倒计时
       setHealthCountdown(intervalMinutes * 60);
       
+      // 定义显示提醒的函数（直接在这里定义，避免闭包问题）
+      const displayReminder = () => {
+        console.log('🚀 displayReminder 被调用');
+        const randomIndex = Math.floor(Math.random() * healthReminders.length);
+        const reminder = healthReminders[randomIndex];
+        console.log('📝 提醒内容:', reminder);
+        
+        setHealthReminder(reminder);
+        setHealthPopupKey(prev => prev + 1);
+        setShowHealthPopup(true);
+        console.log('✅ setShowHealthPopup(true) 已调用');
+        
+        // 发送系统通知
+        if (notificationPermission === 'granted') {
+          const randomFile = backgroundFiles[Math.floor(Math.random() * backgroundFiles.length)];
+          const imageUrl = getBackgroundUrl(randomFile);
+          
+          try {
+            new Notification('💚 久坐提醒', {
+              body: reminder,
+              icon: imageUrl,
+              tag: 'health-reminder',
+              requireInteraction: true,
+            });
+          } catch (error) {
+            console.error('系统通知失败:', error);
+          }
+        }
+        
+        // 自动关闭
+        const duration = healthDisplayDurationRef.current;
+        if (healthPopupTimerRef.current) {
+          clearTimeout(healthPopupTimerRef.current);
+        }
+        healthPopupTimerRef.current = setTimeout(() => {
+          setShowHealthPopup(false);
+        }, duration * 1000);
+      };
+      
+      // 立即显示一次
+      setTimeout(displayReminder, 1000);
+      
+      // 定时提醒
       healthTimerRef.current = setInterval(() => {
-        showHealthReminderRef.current();
-        // 重置倒计时
+        displayReminder();
         setHealthCountdown(intervalMinutes * 60);
       }, intervalMs);
       
@@ -609,7 +650,6 @@ export default function Home() {
         });
       }, 1000);
       
-      console.log(`💚 久坐提醒已开启，间隔 ${intervalMinutes} 分钟`);
     } else {
       // 关闭
       setHealthReminderEnabled(false);
@@ -631,7 +671,7 @@ export default function Home() {
       
       console.log('💔 久坐提醒已关闭');
     }
-  }, [healthReminderEnabled]);
+  }, [healthReminderEnabled, notificationPermission]);
 
   // 关闭弹窗
   const handleClosePopup = useCallback(() => {
@@ -1044,15 +1084,21 @@ export default function Home() {
       )}
 
       {/* 久坐提醒弹窗 */}
-      {showHealthPopup && healthReminder && (
-        <ReminderPopup
-          key={`health-${healthPopupKey}`}
-          message={healthReminder}
-          duration={healthDisplayDuration}
-          onClose={() => setShowHealthPopup(false)}
-          isHealthReminder={true}
-        />
-      )}
+      {(() => {
+        // 调试日志
+        if (showHealthPopup) {
+          console.log('🟢 渲染久坐提醒弹窗:', { showHealthPopup, healthReminder, healthPopupKey });
+        }
+        return showHealthPopup && healthReminder && (
+          <ReminderPopup
+            key={`health-${healthPopupKey}`}
+            message={healthReminder}
+            duration={healthDisplayDuration}
+            onClose={() => setShowHealthPopup(false)}
+            isHealthReminder={true}
+          />
+        );
+      })()}
     </div>
   );
 }
