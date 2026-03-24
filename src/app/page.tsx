@@ -30,6 +30,14 @@ const backgroundFiles = [
 const bookFormats = ['pdf', 'epub', 'docx', 'doc'];
 const reminderFormats = ['txt', 'xlsx', 'xls'];
 
+// Fisher-Yates 洗牌算法
+function shuffleArray<T>(array: T[]): void {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
 // 久坐提醒内容列表
 const healthReminders = [
   '🧘 该休息一下了！站起来活动活动，伸个懒腰吧~',
@@ -85,10 +93,20 @@ export default function Home() {
   const healthDisplayDurationRef = useRef<number>(20);
   const showHealthPopupRef = useRef<boolean>(false);
   const sendSystemNotificationRef = useRef<(message: string, title?: string) => void>(() => {});
+  
+  // 随机选择相关 ref - 确保每个内容都能被显示
+  const availableIndicesRef = useRef<number[]>([]);
+  const healthAvailableIndicesRef = useRef<number[]>([]);
 
   // 同步 ref 值
   useEffect(() => {
     remindersRef.current = reminders;
+    // 当提醒内容改变时，重置可用索引列表
+    if (reminders.length > 0) {
+      availableIndicesRef.current = Array.from({ length: reminders.length }, (_, i) => i);
+      shuffleArray(availableIndicesRef.current);
+      console.log('🔄 已重置提醒索引列表，总数:', reminders.length);
+    }
   }, [reminders]);
 
   useEffect(() => {
@@ -436,6 +454,42 @@ export default function Home() {
   }, []);
 
   // 显示随机提醒
+  // 获取下一个公平随机的提醒索引
+  const getNextReminderIndex = useCallback((totalCount: number): number => {
+    // 如果可用索引列表为空或数量不匹配，重新初始化
+    if (availableIndicesRef.current.length === 0 || availableIndicesRef.current.length !== totalCount) {
+      availableIndicesRef.current = Array.from({ length: totalCount }, (_, i) => i);
+      shuffleArray(availableIndicesRef.current);
+      console.log('🔄 重新初始化提醒索引列表，总数:', totalCount);
+    }
+    
+    // 从列表末尾取出一个索引（已洗牌，所以是随机的）
+    const index = availableIndicesRef.current.pop()!;
+    const remaining = availableIndicesRef.current.length;
+    console.log(`📊 选择索引 ${index}，剩余 ${remaining} 个未显示`);
+    
+    return index;
+  }, []);
+
+  // 获取下一个公平随机的久坐提醒索引
+  const getNextHealthReminderIndex = useCallback((): number => {
+    const totalCount = healthReminders.length;
+    
+    // 如果可用索引列表为空，重新初始化
+    if (healthAvailableIndicesRef.current.length === 0) {
+      healthAvailableIndicesRef.current = Array.from({ length: totalCount }, (_, i) => i);
+      shuffleArray(healthAvailableIndicesRef.current);
+      console.log('🔄 重新初始化久坐提醒索引列表，总数:', totalCount);
+    }
+    
+    // 从列表末尾取出一个索引
+    const index = healthAvailableIndicesRef.current.pop()!;
+    const remaining = healthAvailableIndicesRef.current.length;
+    console.log(`📊 久坐提醒选择索引 ${index}，剩余 ${remaining} 个未显示`);
+    
+    return index;
+  }, []);
+
   const showRandomReminder = useCallback(() => {
     const currentReminders = remindersRef.current;
     const currentDuration = displayDurationRef.current;
@@ -467,9 +521,10 @@ export default function Home() {
         return;
       }
       
-      const randomIndex = Math.floor(Math.random() * currentReminders.length);
+      // 使用公平随机选择
+      const randomIndex = getNextReminderIndex(currentReminders.length);
       const selectedReminder = currentReminders[randomIndex];
-      console.log('📝 Selected reminder:', selectedReminder);
+      console.log('📝 Selected reminder (index:', randomIndex, '):', selectedReminder);
       
       setCurrentReminder(selectedReminder);
       setPopupKey(prev => prev + 1);
@@ -481,7 +536,7 @@ export default function Home() {
         setShowPopup(false);
       }, currentDuration * 1000);
     }, 50);
-  }, [sendSystemNotification]);
+  }, [sendSystemNotification, getNextReminderIndex]);
 
   // 开始定时器
   const startTimer = useCallback(() => {
@@ -565,9 +620,9 @@ export default function Home() {
   // 显示久坐提醒
   const showHealthReminder = useCallback(() => {
     console.log('🚀 showHealthReminder 被调用');
-    const randomIndex = Math.floor(Math.random() * healthReminders.length);
+    const randomIndex = getNextHealthReminderIndex();
     const reminder = healthReminders[randomIndex];
-    console.log('📝 提醒内容:', reminder);
+    console.log('📝 提醒内容 (index:', randomIndex, '):', reminder);
     
     setHealthReminder(reminder);
     setHealthPopupKey(prev => prev + 1);
@@ -596,7 +651,7 @@ export default function Home() {
     healthPopupTimerRef.current = setTimeout(() => {
       setShowHealthPopup(false);
     }, duration * 1000);
-  }, [notificationPermission]);
+  }, [notificationPermission, getNextHealthReminderIndex]);
 
   // 开启/关闭久坐提醒
   const toggleHealthReminder = useCallback(() => {
@@ -624,9 +679,16 @@ export default function Home() {
       // 定义显示提醒的函数（直接在这里定义，避免闭包问题）
       const displayReminder = () => {
         console.log('🚀 displayReminder 被调用');
-        const randomIndex = Math.floor(Math.random() * healthReminders.length);
+        
+        // 使用公平随机选择
+        if (healthAvailableIndicesRef.current.length === 0) {
+          healthAvailableIndicesRef.current = Array.from({ length: healthReminders.length }, (_, i) => i);
+          shuffleArray(healthAvailableIndicesRef.current);
+          console.log('🔄 重新初始化久坐提醒索引列表');
+        }
+        const randomIndex = healthAvailableIndicesRef.current.pop()!;
         const reminder = healthReminders[randomIndex];
-        console.log('📝 提醒内容:', reminder);
+        console.log('📝 提醒内容 (index:', randomIndex, '):', reminder);
         
         // 久坐提醒优先：关闭文件上传模式的弹窗
         setShowPopup(false);
